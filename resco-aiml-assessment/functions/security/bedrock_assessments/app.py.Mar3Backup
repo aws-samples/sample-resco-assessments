@@ -1,0 +1,885 @@
+import boto3
+import csv
+import os
+import logging
+from datetime import datetime, timedelta, timezone
+import time
+from typing import Dict, List, Any, Optional
+from io import StringIO
+import asyncio
+from botocore.config import Config
+from botocore.exceptions import ClientError
+import random
+
+# Configure boto3 with retries
+boto3_config = Config(
+    retries = dict(
+        max_attempts = 10,  # Maximum number of retries
+        mode = 'adaptive'  # Exponential backoff with adaptive mode
+    )
+)
+
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.ERROR)
+
+def check_marketplace_subscription_access(iam_client) -> Dict[str, Any]:
+    """
+    Check for users and roles with overly permissive Marketplace subscription access for Bedrock models
+    """
+    logger.debug("Starting check for overly permissive Marketplace subscription access")
+    try:
+        findings = {
+            'check_name': 'Marketplace Subscription Access Check',
+            'status': 'PASS',
+            'details': '',
+            'csv_data': []
+        }
+
+        overly_permissive_identities = []
+        
+        def check_policy_for_subscription_access(policy_doc: Any) -> bool:
+            try:
+                if isinstance(policy_doc, str):
+                    try:
+                        policy_doc = json.loads(policy_doc)
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to parse policy document string: {policy_doc}")
+                        return False
+
+                if not policy_doc:
+                    return False
+
+                statements = policy_doc.get('Statement', [])
+                if isinstance(statements, dict):
+                    statements = [statements]
+
+                for statement in statements:
+                    effect = statement.get('Effect', '')
+                    if effect.upper() != 'ALLOW':
+                        continue
+
+                    actions = statement.get('Action', [])
+                    if isinstance(actions, str):
+                        actions = [actions]
+
+                    resources = statement.get('Resource', [])
+                    if isinstance(resources, str):
+                        resources = [resources]
+
+                    # Check if aws-marketplace:Subscribe is allowed on * resource
+                    if 'aws-marketplace:Subscribe' in actions or '*' in actions:
+                        if '*' in resources:
+                            return True
+
+                return False
+            except Exception as e:
+                logger.error(f"Error parsing policy document for subscription access: {str(e)}")
+                return False
+
+        # Check roles
+        logger.debug("Checking roles for marketplace subscription access")
+        paginator = iam_client.get_paginator('list_roles')
+        for page in paginator.paginate():
+            for role in page['Roles']:
+                role_name = role['RoleName']
+                try:
+                    # Check attached policies
+                    attached_policies = iam_client.list_attached_role_policies(RoleName=role_name)
+                    for policy in attached_policies['AttachedPolicies']:
+                        policy_arn = policy['PolicyArn']
+                        policy_version = iam_client.get_policy(PolicyArn=policy_arn)['Policy']['DefaultVersionId']
+                        policy_doc = iam_client.get_policy_version(
+                            PolicyArn=policy_arn,
+                            VersionId=policy_version
+                        )['PolicyVersion']['Document']
+                        
+                        if check_policy_for_subscription_access(policy_doc):
+                            overly_permissive_identities.append({
+                                'name': role_name,
+                                'type': 'role',
+                                'policy': policy['PolicyName']
+                            })
+                            break
+
+                    # Check inline policies
+                    inline_policies = iam_client.list_role_policies(RoleName=role_name)
+                    for policy_name in inline_policies['PolicyNames']:
+                        policy_doc = iam_client.get_role_policy(
+                            RoleName=role_name,
+                            PolicyName=policy_name
+                        )['PolicyDocument']
+                        
+                        if check_policy_for_subscription_access(policy_doc):
+                            overly_permissive_identities.append({
+                                'name': role_name,
+                                'type': 'role',
+                                'policy': policy_name
+                            })
+                            break
+
+                except Exception as e:
+                    logger.error(f"Error checking role {role_name}: {str(e)}")
+                    continue
+
+        # Check users
+        logger.debug("Checking users for marketplace subscription access")
+        paginator = iam_client.get_paginator('list_users')
+        for page in paginator.paginate():
+            for user in page['Users']:
+                user_name = user['UserName']
+                try:
+                    # Check attached policies
+                    attached_policies = iam_client.list_attached_user_policies(UserName=user_name)
+                    for policy in attached_policies['AttachedPolicies']:
+                        policy_arn = policy['PolicyArn']
+                        policy_version = iam_client.get_policy(PolicyArn=policy_arn)['Policy']['DefaultVersionId']
+                        policy_doc = iam_client.get_policy_version(
+                            PolicyArn=policy_arn,
+                            VersionId=policy_version
+                        )['PolicyVersion']['Document']
+                        
+                        if check_policy_for_subscription_access(policy_doc):
+                            overly_permissive_identities.append({
+                                'name': user_name,
+                                'type': 'user',
+                                'policy': policy['PolicyName']
+                            })
+                            break
+
+                    # Check inline policies
+                    inline_policies = iam_client.list_user_policies(UserName=user_name)
+                    for policy_name in inline_policies['PolicyNames']:
+                        policy_doc = iam_client.get_user_policy(
+                            UserName=user_name,
+                            PolicyName=policy_name
+                        )['PolicyDocument']
+                        
+                        if check_policy_for_subscription_access(policy_doc):
+                            overly_permissive_identities.append({
+                                'name': user_name,
+                                'type': 'user',
+                                'policy': policy_name
+                            })
+                            break
+
+                except Exception as e:
+                    logger.error(f"Error checking user {user_name}: {str(e)}")
+                    continue
+
+        if overly_permissive_identities:
+            findings['status'] = 'WARN'
+            findings['details'] = f"Found {len(overly_permissive_identities)} identities with overly permissive marketplace subscription access"
+            
+            for identity in overly_permissive_identities:
+                findings['csv_data'].append({
+                    'Finding': 'Overly Permissive Marketplace Subscription Access',
+                    'Finding Details': f"{identity['type'].capitalize()} '{identity['name']}' has overly permissive marketplace subscription access through policy '{identity['policy']}'",
+                    'Resolution': "Ensure that users have access to only the models that you want user to be able to subscribe to based on your organizational policies. For example, you may want users to have access to only text based models and not image and video generation model. This can also help to keep cost in check.",
+                    'Reference': "https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-bedrock-marketplace",
+                    'Severity': 'Warning',
+                    'Status': 'Failed'
+                })
+        else:
+            findings['details'] = "No identities found with overly permissive marketplace subscription access"
+            findings['csv_data'].append({
+                'Finding': 'Marketplace Subscription Access Check',
+                'Finding Details': 'No identities found with overly permissive marketplace subscription access',
+                'Resolution': '',
+                'Reference': "https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-bedrock-marketplace",
+                'Severity': 'Informational',
+                'Status': 'Passed'
+            })
+
+        return findings
+
+    except Exception as e:
+        logger.error(f"Error in check_marketplace_subscription_access: {str(e)}", exc_info=True)
+        return {
+            'check_name': 'Marketplace Subscription Access Check',
+            'status': 'ERROR',
+            'details': f"Error during check: {str(e)}",
+            'csv_data': []
+        }
+
+
+def has_bedrock_access(iam_client, principal_name: str, principal_type: str) -> bool:
+    """
+    Check if a user or role has Bedrock access through policies
+    """
+    logger.debug(f"Checking Bedrock access for {principal_type}: {principal_name}")
+    try:
+        if principal_type == 'role':
+            policies = iam_client.list_attached_role_policies(RoleName=principal_name)
+        else:
+            policies = iam_client.list_attached_user_policies(UserName=principal_name)
+
+        # Check attached policies
+        for policy in policies['AttachedPolicies']:
+            policy_arn = policy['PolicyArn']
+            logger.debug(f"Checking policy: {policy_arn}")
+            policy_version = iam_client.get_policy(PolicyArn=policy_arn)['Policy']['DefaultVersionId']
+            policy_doc = iam_client.get_policy_version(
+                PolicyArn=policy_arn,
+                VersionId=policy_version
+            )['PolicyVersion']['Document']
+
+            if has_bedrock_permissions(policy_doc):
+                logger.info(f"Found Bedrock permissions in policy: {policy_arn}")
+                return True
+
+        # Check inline policies
+        if principal_type == 'role':
+            inline_policies = iam_client.list_role_policies(RoleName=principal_name)
+        else:
+            inline_policies = iam_client.list_user_policies(UserName=principal_name)
+
+        for policy_name in inline_policies['PolicyNames']:
+            logger.debug(f"Checking inline policy: {policy_name}")
+            if principal_type == 'role':
+                policy_doc = iam_client.get_role_policy(
+                    RoleName=principal_name,
+                    PolicyName=policy_name
+                )['PolicyDocument']
+            else:
+                policy_doc = iam_client.get_user_policy(
+                    UserName=principal_name,
+                    PolicyName=policy_name
+                )['PolicyDocument']
+
+            if has_bedrock_permissions(policy_doc):
+                logger.info(f"Found Bedrock permissions in inline policy: {policy_name}")
+                return True
+
+        return False
+
+    except Exception as e:
+        logger.error(f"Error checking permissions for {principal_type} {principal_name}: {str(e)}")
+        return False
+
+
+def check_stale_bedrock_access(iam_client) -> Dict[str, Any]:
+    """
+    Check for users and roles whose last access to Amazon Bedrock is more than 2 months old
+    """
+    logger.debug("Starting check for stale Bedrock access")
+    try:
+        findings = {
+            'check_name': 'Stale Bedrock Access Check',
+            'status': 'PASS',
+            'details': '',
+            'csv_data': []
+        }
+
+        stale_identities = []
+        active_identities = []
+        two_months_ago = datetime.now(timezone.utc) - timedelta(days=60)
+
+        # Use STS to get account ID
+        sts_client = boto3.client('sts', config=boto3_config)
+        account_id = sts_client.get_caller_identity()['Account']
+        
+        # Collect all identities with Bedrock access
+        identities_to_check = []
+        
+        # Check roles
+        logger.debug("Checking roles for Bedrock access")
+        paginator = iam_client.get_paginator('list_roles')
+        for page in paginator.paginate():
+            for role in page['Roles']:
+                try:
+                    if has_bedrock_access(iam_client, role['RoleName'], 'role'):
+                        identities_to_check.append(('role', role['RoleName']))
+                except Exception as e:
+                    logger.error(f"Error checking role {role['RoleName']}: {str(e)}")
+                    continue
+
+        # Check users
+        logger.debug("Checking users for Bedrock access")
+        paginator = iam_client.get_paginator('list_users')
+        for page in paginator.paginate():
+            for user in page['Users']:
+                try:
+                    if has_bedrock_access(iam_client, user['UserName'], 'user'):
+                        identities_to_check.append(('user', user['UserName']))
+                except Exception as e:
+                    logger.error(f"Error checking user {user['UserName']}: {str(e)}")
+                    continue
+
+        if not identities_to_check:
+            logger.info("No identities found with Bedrock access")
+            findings['csv_data'].append({
+                'Finding': 'Stale Bedrock Access Check',
+                'Finding Details': 'No identities found with Bedrock access',
+                'Resolution': '',
+                'Reference': "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
+                'Severity': 'Informational',
+                'Status': 'Passed'
+            })
+            return findings
+
+        # Check last accessed info for each identity
+        for identity_type, identity_name in identities_to_check:
+            try:
+                arn = f"arn:aws:iam::{account_id}:{identity_type}/{identity_name}"
+                logger.debug(f"Checking last access for {identity_type} {identity_name}")
+                
+                # Use throttling handler for API calls
+                response = handle_aws_throttling(
+                    iam_client.generate_service_last_accessed_details,
+                    Arn=arn
+                )
+                job_id = response['JobId']
+                
+                # Wait for job completion with timeout
+                wait_time = 0
+                max_wait_time = 30  # 30 seconds timeout
+                while wait_time < max_wait_time:
+                    response = handle_aws_throttling(
+                        iam_client.get_service_last_accessed_details,
+                        JobId=job_id
+                    )
+                    if response['JobStatus'] == 'COMPLETED':
+                        for service in response['ServicesLastAccessed']:
+                            if service['ServiceName'] == 'Amazon Bedrock':
+                                last_accessed = service.get('LastAuthenticated')
+                                if last_accessed:
+                                    if last_accessed.replace(tzinfo=timezone.utc) < two_months_ago:
+                                        stale_identities.append({
+                                            'name': identity_name,
+                                            'type': identity_type,
+                                            'last_accessed': last_accessed
+                                        })
+                                    else:
+                                        active_identities.append({
+                                            'name': identity_name,
+                                            'type': identity_type,
+                                            'last_accessed': last_accessed
+                                        })
+                                else:
+                                    stale_identities.append({
+                                        'name': identity_name,
+                                        'type': identity_type,
+                                        'last_accessed': None
+                                    })
+                        break
+                    time.sleep(1)
+                    wait_time += 1
+            except Exception as e:
+                logger.error(f"Error checking last access for {identity_type} {identity_name}: {str(e)}")
+                continue
+
+        if stale_identities:
+            findings['status'] = 'WARN'
+            findings['details'] = f"Found {len(stale_identities)} identities with stale Bedrock access"
+            
+            for identity in stale_identities:
+                last_accessed_str = identity['last_accessed'].strftime('%Y-%m-%d') if identity['last_accessed'] else 'never'
+                findings['csv_data'].append({
+                    'Finding': 'Stale Bedrock Access',
+                    'Finding Details': f"{identity['type'].capitalize()} '{identity['name']}' last accessed Bedrock on {last_accessed_str}",
+                    'Resolution': "You can use last accessed information to refine your policies and allow access to only the services and actions that your IAM identities and policies use. This helps you to better adhere to the best practice of least privilege.",
+                    'Reference': "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
+                    'Severity': 'Warning',
+                    'Status': 'Failed'
+                })
+        else:
+            active_details = []
+            for identity in active_identities:
+                last_accessed_str = identity['last_accessed'].strftime('%Y-%m-%d')
+                active_details.append(f"{identity['type'].capitalize()} '{identity['name']}' last accessed on {last_accessed_str}")
+            
+            finding_details = "All identities with Bedrock access are actively using the service"
+            if active_details:
+                finding_details += ": " + "; ".join(active_details)
+            
+            findings['details'] = finding_details
+            findings['csv_data'].append({
+                'Finding': 'Stale Bedrock Access Check',
+                'Finding Details': finding_details,
+                'Resolution': '',
+                'Reference': "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
+                'Severity': 'Informational',
+                'Status': 'Passed'
+            })
+
+        return findings
+
+    except Exception as e:
+        logger.error(f"Error in check_stale_bedrock_access: {str(e)}", exc_info=True)
+        return {
+            'check_name': 'Stale Bedrock Access Check',
+            'status': 'ERROR',
+            'details': f"Error during check: {str(e)}",
+            'csv_data': []
+        }
+
+def check_bedrock_full_access_roles(iam_client) -> Dict[str, Any]:
+    """
+    Check for roles with AmazonBedrockFullAccess policy and their usage
+    """
+    logger.debug("Starting check_bedrock_full_access_roles function")
+    try:
+        bedrock_roles = []
+        findings = {
+            'check_name': 'Bedrock Full Access Check',
+            'status': 'PASS',
+            'roles_found': [],
+            'details': '',
+            'csv_data': []
+        }
+        
+        logger.debug("Getting IAM roles")
+        paginator = iam_client.get_paginator('list_roles')
+        
+        for page in paginator.paginate():
+            for role in page['Roles']:
+                role_name = role['RoleName']
+                logger.debug(f"Checking role: {role_name}")
+                
+                attached_policies = iam_client.list_attached_role_policies(RoleName=role_name)
+                
+                for policy in attached_policies['AttachedPolicies']:
+                    if policy['PolicyName'] == 'AmazonBedrockFullAccess':
+                        logger.info(f"Found AmazonBedrockFullAccess policy in role: {role_name}")
+                        role_usage = get_role_usage(role_name)
+                        # Create a descriptive finding detail
+                        finding_detail = f"Role '{role_name}' found "
+                        if role_usage == 'No active usage found':
+                            finding_detail += "with no active usage"
+                        else:
+                            finding_detail += f"being used by {role_usage}"
+                        
+                        bedrock_roles.append({
+                            'role_name': role_name,
+                            'usage': role_usage,
+                            'finding_detail': finding_detail
+                        })
+        
+        if bedrock_roles:
+            findings['status'] = 'FAIL'
+            findings['roles_found'] = bedrock_roles
+            findings['details'] = f"Found {len(bedrock_roles)} roles with AmazonBedrockFullAccess policy"
+            
+            for role in bedrock_roles:
+                findings['csv_data'].append({
+                    'Finding': 'AmazonBedrockFullAccess role exists',
+                    'Finding Details': role['finding_detail'],
+                    'Resolution': 'Limit the AmazonBedrock policy only to required access',
+                    'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-agent.html#iam-agents-ex-all\nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-br-studio.html',
+                    'Severity': 'Warning',
+                    'Status': 'Failed'
+                })
+        else:
+            findings['details'] = "No roles found with AmazonBedrockFullAccess policy"
+            findings['csv_data'].append({
+                'Finding': 'AmazonBedrockFullAccess role check',
+                'Finding Details': 'No roles found with AmazonBedrockFullAccess policy - This is a recommended security configuration',
+                'Resolution': '',
+                'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-agent.html#iam-agents-ex-all\nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-br-studio.html',
+                'Severity': 'Warning',
+                'Status': 'Passed'
+            })
+        
+        return findings
+        
+    except Exception as e:
+        logger.error(f"Error in check_bedrock_full_access_roles: {str(e)}", exc_info=True)
+        return {
+            'check_name': 'Bedrock Full Access Check',
+            'status': 'ERROR',
+            'roles_found': [],
+            'details': f"Error during check: {str(e)}",
+            'csv_data': []
+        }
+
+def get_role_usage(role_name: str) -> str:
+    """
+    Check where a specific IAM role is being used
+    """
+    logger.debug(f"Checking usage for role: {role_name}")
+    usage_list = []
+    
+    try:
+        # Check Lambda functions
+        lambda_client = boto3.client('lambda')
+        lambda_functions = lambda_client.list_functions()
+        for function in lambda_functions['Functions']:
+            if role_name in function['Role']:
+                usage_list.append(f"Lambda: {function['FunctionName']}")
+                logger.debug(f"Found role usage in Lambda: {function['FunctionName']}")
+    except Exception as e:
+        logger.error(f"Error checking Lambda usage: {str(e)}")
+    
+    try:
+        # Check ECS tasks
+        ecs_client = boto3.client('ecs')
+        clusters = ecs_client.list_clusters()['clusterArns']
+        for cluster in clusters:
+            tasks = ecs_client.list_tasks(cluster=cluster)['taskArns']
+            if tasks:
+                task_details = ecs_client.describe_tasks(cluster=cluster, tasks=tasks)
+                for task in task_details['tasks']:
+                    if role_name in task.get('taskRoleArn', ''):
+                        usage_list.append(f"ECS Task: {task['taskArn']}")
+                        logger.debug(f"Found role usage in ECS task: {task['taskArn']}")
+    except Exception as e:
+        logger.error(f"Error checking ECS usage: {str(e)}")
+    
+    result = '; '.join(usage_list) if usage_list else 'No active usage found'
+    logger.debug(f"Role usage result: {result}")
+    return result
+
+def check_bedrock_vpc_endpoints() -> Dict[str, Any]:
+    """
+    Check if any VPC has Bedrock VPC endpoints
+    """
+    logger.debug("Checking for Bedrock VPC endpoints")
+    try:
+        ec2_client = boto3.client('ec2')
+        
+        # Base endpoint names
+        bedrock_endpoints = [
+            'com.amazonaws.region.bedrock',
+            'com.amazonaws.region.bedrock-runtime',
+            'com.amazonaws.region.bedrock-agent',
+            'com.amazonaws.region.bedrock-agent-runtime'
+        ]
+
+        session = boto3.session.Session()
+        current_region = session.region_name
+        logger.debug(f"Current region: {current_region}")
+
+        # Get list of all VPCs
+        vpcs = ec2_client.describe_vpcs()
+        vpc_ids = [vpc['VpcId'] for vpc in vpcs['Vpcs']]
+        logger.debug(f"Found VPCs: {vpc_ids}")
+        
+        # Replace 'region' with actual region in endpoint names
+        bedrock_endpoints = [endpoint.replace('region', current_region) for endpoint in bedrock_endpoints]
+        logger.debug(f"Looking for endpoints: {bedrock_endpoints}")
+        
+        found_endpoints = []
+        
+        # Get all VPC endpoints
+        paginator = ec2_client.get_paginator('describe_vpc_endpoints')
+        
+        for page in paginator.paginate():
+            for endpoint in page['VpcEndpoints']:
+                service_name = endpoint['ServiceName']
+                vpc_id = endpoint['VpcId']
+                logger.debug(f"Found VPC endpoint: {service_name} in VPC: {vpc_id}")
+                
+                # Check if this endpoint matches any of our Bedrock endpoints
+                for bedrock_endpoint in bedrock_endpoints:
+                    if service_name == bedrock_endpoint:  # Using exact match instead of 'in'
+                        logger.info(f"Found matching Bedrock endpoint: {service_name} in VPC: {vpc_id}")
+                        found_endpoints.append({
+                            'vpc_id': vpc_id,
+                            'service': service_name
+                        })
+                        break
+        
+        logger.info(f"Found Bedrock endpoints: {found_endpoints}")
+        
+        result = {
+            'has_endpoints': len(found_endpoints) > 0,
+            'found_endpoints': found_endpoints,
+            'all_vpcs': vpc_ids
+        }
+        logger.debug(f"VPC endpoint check result: {result}")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error checking VPC endpoints: {str(e)}", exc_info=True)
+        return {
+            'has_endpoints': False,
+            'found_endpoints': [],
+            'all_vpcs': []
+        }
+
+
+def has_bedrock_permissions(policy_doc: Any) -> bool:
+    """
+    Check if a policy document contains Bedrock permissions
+    """
+    logger.debug("Checking policy document for Bedrock permissions")
+    try:
+        # Convert string to dict if needed
+        if isinstance(policy_doc, str):
+            try:
+                policy_doc = json.loads(policy_doc)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse policy document string: {policy_doc}")
+                return False
+        
+        # Handle case where policy_doc might be None
+        if not policy_doc:
+            return False
+            
+        statements = policy_doc.get('Statement', [])
+        if isinstance(statements, dict):
+            statements = [statements]
+            
+        for statement in statements:
+            effect = statement.get('Effect', '')
+            if effect.upper() != 'ALLOW':
+                continue
+                
+            actions = statement.get('Action', [])
+            if isinstance(actions, str):
+                actions = [actions]
+                
+            for action in actions:
+                if 'bedrock' in action.lower():
+                    logger.debug(f"Found Bedrock permission: {action}")
+                    return True
+        
+        return False
+    except Exception as e:
+        logger.error(f"Error parsing policy document: {str(e)}")
+        logger.debug(f"Problematic policy document: {policy_doc}")
+        return False
+
+def handle_aws_throttling(func, *args, **kwargs):
+    """
+    Handle AWS API throttling with exponential backoff
+    """
+    max_retries = 5
+    base_delay = 1  # Start with 1 second delay
+    
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'Throttling':
+                if attempt == max_retries - 1:
+                    raise  # Re-raise if we're out of retries
+                delay = (2 ** attempt) * base_delay + (random.random() * 0.1)
+                logger.warning(f"Request throttled. Retrying in {delay:.2f} seconds...")
+                time.sleep(delay)
+            else:
+                raise
+
+def has_bedrock_permissions(policy_doc: Dict) -> bool:
+    """
+    Check if a policy document contains Bedrock permissions
+    """
+    logger.debug("Checking policy document for Bedrock permissions")
+    try:
+        # Handle string input by converting to dict
+        if isinstance(policy_doc, str):
+            import json
+            policy_doc = json.loads(policy_doc)
+            
+        for statement in policy_doc.get('Statement', []):
+            action = statement.get('Action', [])
+            if isinstance(action, str):
+                action = [action]
+            
+            for act in action:
+                if 'bedrock' in act.lower():
+                    effect = statement.get('Effect', '')
+                    if effect.upper() == 'ALLOW':
+                        logger.debug(f"Found Bedrock permission: {act}")
+                        return True
+        
+        return False
+    except Exception as e:
+        logger.error(f"Error parsing policy document: {str(e)}")
+        return False
+
+def check_bedrock_access_and_vpc_endpoints(iam_client) -> Dict[str, Any]:
+    """
+    Check for Bedrock access permissions and related VPC endpoints
+    """
+    logger.debug("Starting check_bedrock_access_and_vpc_endpoints function")
+    try:
+        findings = {
+            'check_name': 'Bedrock Access and VPC Endpoint Check',
+            'status': 'PASS',
+            'details': '',
+            'csv_data': []
+        }
+
+        bedrock_access_found = False
+        
+        # Check roles
+        logger.debug("Checking roles for Bedrock access")
+        paginator = iam_client.get_paginator('list_roles')
+        for page in paginator.paginate():
+            for role in page['Roles']:
+                logger.debug(f"Checking role: {role['RoleName']}")
+                if has_bedrock_access(iam_client, role['RoleName'], 'role'):
+                    logger.info(f"Found Bedrock access in role: {role['RoleName']}")
+                    bedrock_access_found = True
+                    break
+
+        # Check users if no roles found with access
+        if not bedrock_access_found:
+            logger.debug("Checking users for Bedrock access")
+            paginator = iam_client.get_paginator('list_users')
+            for page in paginator.paginate():
+                for user in page['Users']:
+                    logger.debug(f"Checking user: {user['UserName']}")
+                    if has_bedrock_access(iam_client, user['UserName'], 'user'):
+                        logger.info(f"Found Bedrock access in user: {user['UserName']}")
+                        bedrock_access_found = True
+                        break
+
+        if bedrock_access_found:
+            vpc_endpoint_check = check_bedrock_vpc_endpoints()
+            logger.debug(f"VPC endpoint check results: {vpc_endpoint_check}")
+            
+            if not vpc_endpoint_check['has_endpoints']:
+                findings['status'] = 'WARN'
+                
+                if vpc_endpoint_check['all_vpcs']:
+                    vpc_list = ', '.join(vpc_endpoint_check['all_vpcs'])
+                    finding_detail = f"No Bedrock service VPC endpoints found in VPCs: {vpc_list}"
+                else:
+                    finding_detail = "No VPCs found in the account"
+                
+                findings['csv_data'].append({
+                    'Finding': 'Amazon Bedrock private connectivity not used',
+                    'Finding Details': finding_detail,
+                    'Resolution': 'Create a VPC endpoint in your VPC with any of the following Bedrock service endpoints that your application may be using:\n- com.amazonaws.region.bedrock\n- com.amazonaws.region.bedrock-runtime\n- com.amazonaws.region.bedrock-agent\n- com.amazonaws.region.bedrock-agent-runtime',
+                    'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html',
+                    'Severity': 'Informational',
+                    'Status': 'Failed'
+                })
+            else:
+                # Add passing finding with details about found endpoints
+                endpoint_details = []
+                for endpoint in vpc_endpoint_check['found_endpoints']:
+                    endpoint_details.append(f"VPC {endpoint['vpc_id']} has endpoint {endpoint['service']}")
+                finding_detail = "Bedrock VPC endpoints properly configured: " + "; ".join(endpoint_details)
+                
+                findings['details'] = finding_detail
+                findings['csv_data'].append({
+                    'Finding': 'Amazon Bedrock private connectivity check',
+                    'Finding Details': finding_detail,
+                    'Resolution': '',
+                    'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html',
+                    'Severity': 'Informational',
+                    'Status': 'Passed'
+                })
+        else:
+            findings['details'] = "No Bedrock access found in roles or users"
+            findings['csv_data'].append({
+                'Finding': 'Amazon Bedrock access check',
+                'Finding Details': 'No Bedrock access found in roles or users - No VPC endpoint check required',
+                'Resolution': '',
+                'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html',
+                'Severity': 'Informational',
+                'Status': 'Passed'
+            })
+
+        return findings
+
+    except Exception as e:
+        logger.error(f"Error in check_bedrock_access_and_vpc_endpoints: {str(e)}", exc_info=True)
+        return {
+            'check_name': 'Bedrock Access and VPC Endpoint Check',
+            'status': 'ERROR',
+            'details': f"Error during check: {str(e)}",
+            'csv_data': []
+        }
+
+def generate_csv_report(findings: List[Dict[str, Any]]) -> str:
+    """
+    Generate CSV report from all security check findings
+    """
+    logger.debug("Generating CSV report")
+    csv_buffer = StringIO()
+    fieldnames = ['Finding', 'Finding Details', 'Resolution', 'Reference', 'Severity', 'Status']
+    writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+    
+    writer.writeheader()
+    for finding in findings:
+        if finding['csv_data']:
+            for row in finding['csv_data']:
+                writer.writerow(row)
+    
+    return csv_buffer.getvalue()
+
+def write_to_s3(csv_content: str, bucket_name: str) -> str:
+    """
+    Write CSV report to S3 bucket
+    """
+    logger.debug(f"Writing CSV report to S3 bucket: {bucket_name}")
+    try:
+        s3_client = boto3.client('s3')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        file_name = f'bedrock_security_report_{timestamp}.csv'
+        
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=file_name,
+            Body=csv_content,
+            ContentType='text/csv'
+        )
+        
+        s3_url = f"https://{bucket_name}.s3.amazonaws.com/{file_name}"
+        logger.info(f"Successfully wrote report to S3: {s3_url}")
+        return s3_url
+    except Exception as e:
+        logger.error(f"Error writing to S3: {str(e)}", exc_info=True)
+        raise
+
+# Modify the lambda_handler to include the new check
+def lambda_handler(event, context):
+    logger.info("Starting Bedrock security assessment")
+    iam_client = boto3.client('iam', config=boto3_config)
+    all_findings = []
+    
+    try:
+        # Check for AmazonBedrockFullAccess roles
+        logger.info("Starting AmazonBedrockFullAccess check")
+        bedrock_full_access_findings = check_bedrock_full_access_roles(iam_client)
+        all_findings.append(bedrock_full_access_findings)
+        
+        # Check for Bedrock access and VPC endpoints
+        logger.info("Starting Bedrock access and VPC endpoints check")
+        bedrock_access_vpc_findings = check_bedrock_access_and_vpc_endpoints(iam_client)
+        all_findings.append(bedrock_access_vpc_findings)
+        
+        # Check for stale access
+        logger.info("Starting stale access check")
+        stale_access_findings = check_stale_bedrock_access(iam_client)
+        all_findings.append(stale_access_findings)
+        
+        # Check for overly permissive marketplace subscription access
+        logger.info("Starting marketplace subscription access check")
+        marketplace_access_findings = check_marketplace_subscription_access(iam_client)
+        all_findings.append(marketplace_access_findings)
+        
+        # Generate CSV report content
+        logger.info("Generating CSV report")
+        csv_content = generate_csv_report(all_findings)
+        
+        # Get S3 bucket name from environment variable
+        bucket_name = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
+        if not bucket_name:
+            raise ValueError("AIML_ASSESSMENT_BUCKET_NAME environment variable is not set")
+        
+        # Write CSV report to S3
+        logger.info("Writing report to S3")
+        s3_url = write_to_s3(csv_content, bucket_name)
+        
+        return {
+            'statusCode': 200,
+            'body': {
+                'message': 'Security checks completed successfully',
+                'findings': all_findings,
+                'report_url': s3_url
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in lambda_handler: {str(e)}", exc_info=True)
+        return {
+            'statusCode': 500,
+            'body': f'Error during security checks: {str(e)}'
+        }

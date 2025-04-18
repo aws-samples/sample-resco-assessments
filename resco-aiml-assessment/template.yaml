@@ -1,0 +1,261 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  resco-aiml-assessment
+
+  Sample SAM Template for resco-aiml-assessment
+
+Resources:
+  AIMLAssessmentStateMachine:
+    Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
+    Properties:
+      DefinitionUri: statemachine/resco_assessments.asl.json
+      DefinitionSubstitutions:
+        IAMPermissionCachingFunction: !GetAtt IAMPermissionCachingFunction.Arn
+        BedrockSecurityAssessmentFunction: !GetAtt BedrockSecurityAssessmentFunction.Arn
+        SagemakerSecurityAssessmentFunction: !GetAtt SagemakerSecurityAssessmentFunction.Arn
+        GenerateConsolidatedReportFunction: !GetAtt GenerateConsolidatedReportFunction.Arn
+        AIMLAssessmentBucketName: !Ref AIMLAssessmentBucket
+      Policies: # Find out more about SAM policy templates: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+        - LambdaInvokePolicy:
+            FunctionName: !Ref BedrockSecurityAssessmentFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref IAMPermissionCachingFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SagemakerSecurityAssessmentFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref GenerateConsolidatedReportFunction
+        #Add S3 Read Write policy
+        - S3CrudPolicy:
+            BucketName: !Ref AIMLAssessmentBucket
+
+  IAMPermissionCachingFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      FunctionName: IAMPermissionCachingFunction
+      CodeUri: functions/security/iam_permission_caching/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 600  # 5 minutes
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AIML_ASSESSMENT_BUCKET_NAME: !Ref AIMLAssessmentBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref AIMLAssessmentBucket
+        - Statement:
+            - Sid: IAMPermissions
+              Effect: Allow
+              Action:
+                - iam:ListRoles
+                - iam:ListUsers
+                - iam:ListAttachedRolePolicies
+                - iam:ListAttachedUserPolicies
+                - iam:ListRolePolicies
+                - iam:ListUserPolicies
+                - iam:GetRolePolicy
+                - iam:GetUserPolicy
+                - iam:GetPolicy
+                - iam:GetPolicyVersion
+                - iam:GenerateServiceLastAccessedDetails
+                - iam:GetServiceLastAccessedDetails
+                - sts:GetCallerIdentity
+              Resource: '*'
+  GenerateConsolidatedReportFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      FunctionName: GenerateConsolidatedReportFunction
+      CodeUri: functions/security/generate_consolidated_report/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 600  # 5 minutes
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AIML_ASSESSMENT_BUCKET_NAME: !Ref AIMLAssessmentBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref AIMLAssessmentBucket
+  BedrockSecurityAssessmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      FunctionName: BedrockSecurityAssessment
+      CodeUri: functions/security/bedrock_assessments/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      # Add S3 Read Write policy
+      Timeout: 600  # 5 minutes
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AIML_ASSESSMENT_BUCKET_NAME: !Ref AIMLAssessmentBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref AIMLAssessmentBucket
+        - Statement:
+            - Sid: IAMPermissions
+              Effect: Allow
+              Action:
+                - iam:ListRoles
+                - iam:ListUsers
+                - iam:ListAttachedRolePolicies
+                - iam:ListAttachedUserPolicies
+                - iam:ListRolePolicies
+                - iam:ListUserPolicies
+                - iam:GetRolePolicy
+                - iam:GetUserPolicy
+                - iam:GetPolicy
+                - iam:GetPolicyVersion
+                - iam:GenerateServiceLastAccessedDetails
+                - iam:GetServiceLastAccessedDetails
+                - sts:GetCallerIdentity
+              Resource: '*'
+            - Sid: LambdaPermissions
+              Effect: Allow
+              Action:
+                - lambda:ListFunctions
+              Resource: '*'
+            - Sid: ECSPermissions
+              Effect: Allow
+              Action:
+                - ecs:ListClusters
+                - ecs:ListTasks
+                - ecs:DescribeTasks
+              Resource: '*'
+            - Sid: EC2Permissions
+              Effect: Allow
+              Action:
+                - ec2:DescribeVpcEndpoints
+                - ec2:DescribeVpcs  # Added this permission
+              Resource: '*'
+  SagemakerSecurityAssessmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+    Properties:
+      FunctionName: SagemakerSecurityAssessment
+      CodeUri: functions/security/sagemaker_assessments/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      # Add S3 Read Write policy
+      Timeout: 600  # 5 minutes
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AIML_ASSESSMENT_BUCKET_NAME: !Ref AIMLAssessmentBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref AIMLAssessmentBucket
+        - Statement:
+            - Sid: IAMPermissions
+              Effect: Allow
+              Action:
+                - iam:ListRoles
+                - iam:ListUsers
+                - iam:ListAttachedRolePolicies
+                - iam:ListAttachedUserPolicies
+                - iam:ListRolePolicies
+                - iam:ListUserPolicies
+                - iam:GetRolePolicy
+                - iam:GetUserPolicy
+                - iam:GetPolicy
+                - iam:GetPolicyVersion
+                - iam:GenerateServiceLastAccessedDetails
+                - iam:GetServiceLastAccessedDetails
+                - sts:GetCallerIdentity
+              Resource: '*'
+            - Sid: LambdaPermissions
+              Effect: Allow
+              Action:
+                - lambda:ListFunctions
+              Resource: '*'
+        - Statement:
+            - Sid: SageMakerPermissions
+              Effect: Allow
+              Action:
+                - sagemaker:ListNotebookInstances
+                - sagemaker:DescribeNotebookInstance
+                - sagemaker:ListDomains
+                - sagemaker:DescribeDomain
+                - sagemaker:ListTrainingJobs
+                - sagemaker:DescribeTrainingJob
+                - kms:DescribeKey
+                - kms:ListAliases
+                - sagemaker:ListModelPackageGroups
+                - sagemaker:ListModelPackages
+                - sagemaker:ListFeatureGroups
+                - sagemaker:ListPipelines
+                - sagemaker:ListPipelineExecutions
+                - sagemaker:ListProcessingJobs
+                - sagemaker:DescribeProcessingJob
+                - sagemaker:ListMonitoringSchedules
+                - sagemaker:DescribeMonitoringSchedule
+              Resource: '*'
+        - Statement:
+            - Sid: GuardDutyPermissions
+              Effect: Allow
+              Action:
+                - guardduty:GetFindings
+                - guardduty:ListFindings
+                - guardduty:ListDetectors
+                - guardduty:GetDetector
+                - guardduty:GetFindingsStatistics
+                - guardduty:ListPublishingDestinations
+                - guardduty:ListTagsForResource
+                - guardduty:GetMemberDetectors
+                - guardduty:DescribeMalwareScans
+                - guardduty:GetRemainingFreeTrialDays
+                - guardduty:GetUsageStatistics
+              Resource: '*'
+        - Statement:
+            - Sid: EC2Permissions
+              Effect: Allow
+              Action:
+                - ec2:DescribeVpcEndpoints
+                - ec2:DescribeVpcs  # Added this permission
+              Resource: '*'
+# Add a S3 bucket to store the AIML assessment results
+  AIMLAssessmentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-aiml-assessment-bucket-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  AssessmentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AIMLAssessmentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: SecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: 
+              - !Sub '${AIMLAssessmentBucket.Arn}/*'
+              - !GetAtt AIMLAssessmentBucket.Arn
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+Outputs:
+  AIMLAssessmentStateMachineArn:
+    Description: "AIML Assessment State Machine"
+    Value: !Ref AIMLAssessmentStateMachine
+  AssessmentBucketName:
+    Description: Name of the S3 bucket where assessment reports are stored
+    Value: !Ref AIMLAssessmentBucket

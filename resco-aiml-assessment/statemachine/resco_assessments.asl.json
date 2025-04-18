@@ -1,0 +1,119 @@
+{
+    "Comment": "A state machine that performs ReSCO assessments.",
+    "StartAt": "IAM Permission Caching",
+    "States": {
+        "IAM Permission Caching": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                }
+            ],
+            "Next": "Run Security Assessments",
+            "QueryLanguage": "JSONata",
+            "Arguments": {
+                "FunctionName": "${IAMPermissionCachingFunction}",
+                "Payload": "{% $states.context %}"
+            }
+        },
+        "Run Security Assessments": {
+            "Type": "Parallel",
+            "Branches": [
+                {
+                    "StartAt": "Bedrock Security Assessment",
+                    "States": {
+                        "Bedrock Security Assessment": {
+                            "Type": "Task",
+                            "Resource": "arn:aws:states:::lambda:invoke",
+                            "Retry": [
+                                {
+                                    "ErrorEquals": [
+                                        "Lambda.ServiceException",
+                                        "Lambda.AWSLambdaException",
+                                        "Lambda.SdkClientException",
+                                        "Lambda.TooManyRequestsException"
+                                    ],
+                                    "IntervalSeconds": 1,
+                                    "MaxAttempts": 3,
+                                    "BackoffRate": 2,
+                                    "JitterStrategy": "FULL"
+                                }
+                            ],
+                            "End": true,
+                            "QueryLanguage": "JSONata",
+                            "Arguments": {
+                                "FunctionName": "${BedrockSecurityAssessmentFunction}",
+                                "Payload": "{% $states.context %}"
+                            }
+                        }
+                    }
+                },
+                {
+                    "StartAt": "Sagemaker Sagemaker Assessment",
+                    "States": {
+                        "Sagemaker Sagemaker Assessment": {
+                            "Type": "Task",
+                            "Resource": "arn:aws:states:::lambda:invoke",
+                            "Retry": [
+                                {
+                                    "ErrorEquals": [
+                                        "Lambda.ServiceException",
+                                        "Lambda.AWSLambdaException",
+                                        "Lambda.SdkClientException",
+                                        "Lambda.TooManyRequestsException"
+                                    ],
+                                    "IntervalSeconds": 1,
+                                    "MaxAttempts": 3,
+                                    "BackoffRate": 2,
+                                    "JitterStrategy": "FULL"
+                                }
+                            ],
+                            "End": true,
+                            "QueryLanguage": "JSONata",
+                            "Arguments": {
+                                "FunctionName": "${SagemakerSecurityAssessmentFunction}",
+                                "Payload": "{% $states.context %}"
+                            }
+                        }
+                    }
+                }
+            ],
+            "QueryLanguage": "JSONata",
+            "Next": "Generate Consolidated Report"
+        },
+        "Generate Consolidated Report": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                }
+            ],
+            "End": true,
+            "QueryLanguage": "JSONata",
+            "Arguments": {
+                "FunctionName": "${GenerateConsolidatedReportFunction}",
+                "Payload": "{% $states.context %}"
+            }
+        }
+    }
+}
