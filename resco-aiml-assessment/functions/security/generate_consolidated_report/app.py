@@ -146,7 +146,7 @@ def get_assessment_results(execution_id: str) -> Dict[str, Any]:
 
 def generate_html_report(assessment_results: Dict[str, Any]) -> str:
     """
-    Generate HTML report from assessment results
+    Generate HTML report from assessment results with sortable, filterable table and pagination
     
     Args:
         assessment_results (Dict[str, Any]): Assessment results from get_assessment_results
@@ -154,13 +154,38 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
     Returns:
         str: HTML content as string
     """
-    html_template = """
+
+    # Calculate metrics
+    severity_counts = {'High': 0, 'Medium': 0, 'Low': 0, 'Informational': 0}
+    finding_counts = {}
+    
+    # Process Bedrock findings
+    for findings in assessment_results.get('bedrock', {}).values():
+        for finding in findings:
+            severity = finding.get('Severity', 'Low')
+            finding_name = finding.get('Finding', 'Unknown')
+            
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
+            finding_counts[finding_name] = finding_counts.get(finding_name, 0) + 1
+    
+    # Process SageMaker findings
+    for findings in assessment_results.get('sagemaker', {}).values():
+        for finding in findings:
+            severity = finding.get('Severity', 'Low')
+            finding_name = finding.get('Finding', 'Unknown')
+            
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
+            finding_counts[finding_name] = finding_counts.get(finding_name, 0) + 1
+
+    html_template = r"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>AIML Security Assessment Report</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
         <style>
             body {{
                 font-family: Arial, sans-serif;
@@ -175,20 +200,6 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
                 padding: 15px;
                 background-color: #f8f9fa;
                 border-radius: 5px;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 20px;
-            }}
-            th, td {{
-                padding: 12px;
-                text-align: left;
-                border-bottom: 1px solid #ddd;
-            }}
-            th {{
-                background-color: #f8f9fa;
-                font-weight: bold;
             }}
             .severity-high {{
                 color: #dc3545;
@@ -212,76 +223,139 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
                 color: #666;
                 font-size: 0.9em;
             }}
+            .dataTables_filter {{
+                margin-bottom: 10px;
+            }}
+            .resolution-link {{
+                color: #0d6efd;
+                text-decoration: none;
+            }}
+            .resolution-link:hover {{
+                text-decoration: underline;
+            }}
         </style>
     </head>
     <body>
-        <div class="header">
-            <h1>AIML Security Assessment Report</h1>
-            <p class="timestamp">Generated: {timestamp}</p>
-            <p>Execution ID: {execution_id}</p>
+        <div class="container-fluid">
+            <div class="header">
+                <h1>AIML Security Assessment Report</h1>
+                <p class="timestamp">Generated: {timestamp}</p>
+                <p>Execution ID: {execution_id}</p>
+            </div>
+            <h2>Findings</h2>
+            <table id="findingsTable" class="table table-striped table-bordered">
+                <thead>
+                    <tr>
+                        <th>Finding</th>
+                        <th>Finding Details</th>
+                        <th>Resolution</th>
+                        <th>Reference</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {table_rows}
+                </tbody>
+            </table>
         </div>
-        
-        <h2>Consolidated Findings</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Finding</th>
-                    <th>Finding Details</th>
-                    <th>Resolution</th>
-                    <th>Reference</th>
-                    <th>Severity</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {table_rows}
-            </tbody>
-        </table>
+
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+        <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+        <script>
+            $(document).ready(function() {{
+                $('#findingsTable').DataTable({{
+                    pageLength: 10,
+                    lengthMenu: [[10, 20, 50, -1], [10, 20, 50, "All"]],
+                    order: [[4, 'desc']], // Sort by Severity by default
+                    columnDefs: [
+                        {{
+                            targets: 2, // Resolution column
+                            render: function(data, type, row) {{
+                                if (type === 'display' && data) {{
+                                    // Split multiple URLs and create links
+                                    const urls = data.split('\\n').map(line => {{
+                                        const urlMatch = line.match(/(https?:\/\/[^\s]+)/g);
+                                        if (urlMatch) {{
+                                            return line.replace(urlMatch[0], 
+                                                `<a href="${{urlMatch[0]}}" class="resolution-link" target="_blank">${{urlMatch[0]}}</a>`);
+                                        }}
+                                        return line;
+                                    }});
+                                    return urls.join('<br>');
+                                }}
+                                return data;
+                            }}
+                        }},
+                        {{
+                            targets: 3, // Reference column
+                            render: function(data, type, row) {{
+                                if (type === 'display' && data) {{
+                                    // Split multiple URLs and create links
+                                    const urls = data.split('\\n').map(url => 
+                                        `<a href="${{url}}" class="resolution-link" target="_blank">${{url}}</a>`);
+                                    return urls.join('<br>');
+                                }}
+                                return data;
+                            }}
+                        }},
+                        {{
+                            targets: 4, // Severity column
+                            render: function(data, type, row) {{
+                                if (type === 'display') {{
+                                    const severityClass = data.toLowerCase() === 'high' ? 'severity-high' :
+                                                        data.toLowerCase() === 'medium' ? 'severity-medium' :
+                                                        'severity-low';
+                                    return `<span class="${{severityClass}}">${{data}}</span>`;
+                                }}
+                                return data;
+                            }}
+                        }},
+                        {{
+                            targets: 5, // Status column
+                            render: function(data, type, row) {{
+                                if (type === 'display') {{
+                                    const statusClass = data.toLowerCase() === 'open' ? 'status-open' : 'status-resolved';
+                                    return `<span class="${{statusClass}}">${{data}}</span>`;
+                                }}
+                                return data;
+                            }}
+                        }}
+                    ]
+                }});
+            }});
+        </script>
     </body>
     </html>
     """
 
-    def get_severity_class(severity: str) -> str:
-        severity = severity.lower()
-        if severity == 'high':
-            return 'severity-high'
-        elif severity == 'medium':
-            return 'severity-medium'
-        return 'severity-low'
-
-    def get_status_class(status: str) -> str:
-        status = status.lower()
-        return 'status-resolved' if status == 'resolved' else 'status-open'
-
     # Generate table rows from assessment results
     rows = []
-    
-    # Process Bedrock findings
     for assessment_type, findings in assessment_results.get('bedrock', {}).items():
         for finding in findings:
             row = f"""
                 <tr>
-                    <td>Bedrock - {finding.get('finding_name', 'N/A')}</td>
-                    <td>{finding.get('finding_details', 'N/A')}</td>
-                    <td>{finding.get('resolution', 'N/A')}</td>
-                    <td>{finding.get('reference', 'N/A')}</td>
-                    <td class="{get_severity_class(finding.get('severity', 'low'))}">{finding.get('severity', 'Low')}</td>
-                    <td class="{get_status_class(finding.get('status', 'open'))}">{finding.get('status', 'Open')}</td>
+                    <td>Bedrock - {finding.get('Finding', 'N/A')}</td>
+                    <td>{finding.get('Finding Details', 'N/A')}</td>
+                    <td>{finding.get('Resolution', 'N/A')}</td>
+                    <td>{finding.get('Reference', 'N/A')}</td>
+                    <td>{finding.get('Severity', 'Low')}</td>
+                    <td>{finding.get('Status', 'Open')}</td>
                 </tr>
             """
             rows.append(row)
     
-    # Process SageMaker findings
     for assessment_type, findings in assessment_results.get('sagemaker', {}).items():
         for finding in findings:
             row = f"""
                 <tr>
-                    <td>SageMaker - {finding.get('finding_name', 'N/A')}</td>
-                    <td>{finding.get('finding_details', 'N/A')}</td>
-                    <td>{finding.get('resolution', 'N/A')}</td>
-                    <td>{finding.get('reference', 'N/A')}</td>
-                    <td class="{get_severity_class(finding.get('severity', 'low'))}">{finding.get('severity', 'Low')}</td>
-                    <td class="{get_status_class(finding.get('status', 'open'))}">{finding.get('status', 'Open')}</td>
+                    <td>SageMaker - {finding.get('Finding', 'N/A')}</td>
+                    <td>{finding.get('Finding Details', 'N/A')}</td>
+                    <td>{finding.get('Resolution', 'N/A')}</td>
+                    <td>{finding.get('Reference', 'N/A')}</td>
+                    <td>{finding.get('Severity', 'Low')}</td>
+                    <td>{finding.get('Status', 'Open')}</td>
                 </tr>
             """
             rows.append(row)
@@ -292,17 +366,13 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
         execution_id=assessment_results.get('execution_id', 'N/A'),
         total_files=assessment_results.get('summary', {}).get('total_files_processed', 0),
         categories=', '.join(assessment_results.get('summary', {}).get('categories_found', [])),
-        table_rows='\n'.join([f"""<tr>
-                    <td>{finding.get('Finding', 'N/A')}</td>
-                    <td>{finding.get('Finding Details', 'N/A')}</td>
-                    <td>{finding.get('Resolution', 'N/A')}</td>
-                    <td>{finding.get('Reference', 'N/A')}</td>
-                    <td>{finding.get('Severity', 'Low')}</td>
-                    <td>{finding.get('Status', 'Open')}</td>
-                </tr>""" for category in ['bedrock', 'sagemaker'] 
-                for findings in assessment_results.get(category, {}).values() 
-                for finding in findings])
+        table_rows='\n'.join(rows),
+        high_count=severity_counts.get('High', 0),
+        medium_count=severity_counts.get('Medium', 0),
+        low_count=severity_counts.get('Low', 0),
+        info_count=severity_counts.get('Informational', 0)
     )
+
     
     return html_content
 
@@ -379,7 +449,6 @@ def lambda_handler(event, context):
             'body': {
                 'message': 'Successfully generated HTML report',
                 'report_location': f"s3://{s3_bucket}/{s3_key}",
-                'summary': assessment_results['summary']
             }
         }
 

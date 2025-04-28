@@ -149,7 +149,7 @@ def check_marketplace_subscription_access(permission_cache) -> Dict[str, Any]:
                     'Finding Details': f"{identity['type'].capitalize()} '{identity['name']}' has overly permissive marketplace subscription access through policy '{identity['policy']}'",
                     'Resolution': "Ensure that users have access to only the models that you want user to be able to subscribe to based on your organizational policies. For example, you may want users to have access to only text based models and not image and video generation model. This can also help to keep cost in check.",
                     'Reference': "https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-bedrock-marketplace",
-                    'Severity': 'Warning',
+                    'Severity': 'Medium',
                     'Status': 'Failed'
                 })
         else:
@@ -159,7 +159,7 @@ def check_marketplace_subscription_access(permission_cache) -> Dict[str, Any]:
                 'Finding Details': 'No identities found with overly permissive marketplace subscription access',
                 'Resolution': '',
                 'Reference': "https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-bedrock-marketplace",
-                'Severity': 'Informational',
+                'Severity': 'N/A',
                 'Status': 'Passed'
             })
 
@@ -173,7 +173,6 @@ def check_marketplace_subscription_access(permission_cache) -> Dict[str, Any]:
             'details': f"Error during check: {str(e)}",
             'csv_data': []
         }
-
 
 def has_bedrock_access(iam_client, principal_name: str, principal_type: str) -> bool:
     """
@@ -229,7 +228,6 @@ def has_bedrock_access(iam_client, principal_name: str, principal_type: str) -> 
         logger.error(f"Error checking permissions for {principal_type} {principal_name}: {str(e)}")
         return False
 
-
 def check_stale_bedrock_access(permission_cache) -> Dict[str, Any]:
     logger.debug("Starting check for stale Bedrock access")
     try:
@@ -266,7 +264,7 @@ def check_stale_bedrock_access(permission_cache) -> Dict[str, Any]:
                 'Finding Details': 'No identities found with Bedrock access',
                 'Resolution': '',
                 'Reference': "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
-                'Severity': 'Informational',
+                'Severity': 'N/A',
                 'Status': 'Passed'
             })
             return findings
@@ -324,7 +322,7 @@ def check_stale_bedrock_access(permission_cache) -> Dict[str, Any]:
                     'Finding Details': f"{identity['type'].capitalize()} '{identity['name']}' last accessed Bedrock on {last_accessed_str}",
                     'Resolution': "You can use last accessed information to refine your policies and allow access to only the services and actions that your IAM identities and policies use. This helps you to better adhere to the best practice of least privilege.",
                     'Reference': "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
-                    'Severity': 'Warning',
+                    'Severity': 'Medium',
                     'Status': 'Failed'
                 })
         else:
@@ -343,7 +341,7 @@ def check_stale_bedrock_access(permission_cache) -> Dict[str, Any]:
                 'Finding Details': finding_details,
                 'Resolution': '',
                 'Reference': "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
-                'Severity': 'Informational',
+                'Severity': 'N/A',
                 'Status': 'Passed'
             })
 
@@ -390,7 +388,7 @@ def check_bedrock_full_access_roles(permission_cache) -> Dict[str, Any]:
                 'Finding Details': f"Role '{role['name']}' has AmazonBedrockFullAccess policy attached",
                 'Resolution': 'Limit the AmazonBedrock policy only to required access',
                 'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-agent.html#iam-agents-ex-all\nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-br-studio.html',
-                'Severity': 'Warning',
+                'Severity': 'High',
                 'Status': 'Failed'
             })
     else:
@@ -400,7 +398,7 @@ def check_bedrock_full_access_roles(permission_cache) -> Dict[str, Any]:
             'Finding Details': 'No roles found with AmazonBedrockFullAccess policy',
             'Resolution': '',
             'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-agent.html#iam-agents-ex-all\nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-br-studio.html',
-            'Severity': 'Informational',
+            'Severity': 'N/A',
             'Status': 'Passed'
         })
 
@@ -512,7 +510,6 @@ def has_bedrock_permissions_in_cache(permissions: Dict) -> bool:
         if has_bedrock_permissions(policy['document']):
             return True
     return False
-
 
 def has_bedrock_permissions(policy_doc: Any) -> bool:
     """
@@ -636,7 +633,7 @@ def check_bedrock_access_and_vpc_endpoints(permission_cache) -> Dict[str, Any]:
                     'Finding Details': finding_detail,
                     'Resolution': 'Create a VPC endpoint in your VPC with any of the following Bedrock service endpoints that your application may be using:\n- com.amazonaws.region.bedrock\n- com.amazonaws.region.bedrock-runtime\n- com.amazonaws.region.bedrock-agent\n- com.amazonaws.region.bedrock-agent-runtime',
                     'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html',
-                    'Severity': 'Informational',
+                    'Severity': 'Medium',
                     'Status': 'Failed'
                 })
             else:
@@ -721,9 +718,9 @@ def lambda_handler(event, context):
         bedrock_access_vpc_findings = check_bedrock_access_and_vpc_endpoints(permission_cache)
         all_findings.append(bedrock_access_vpc_findings)
         
-        #logger.info("Running stale access check")
-        #stale_access_findings = check_stale_bedrock_access(permission_cache)
-        #all_findings.append(stale_access_findings)
+        logger.info("Running stale access check")
+        stale_access_findings = check_stale_bedrock_access(permission_cache)
+        all_findings.append(stale_access_findings)
         
         logger.info("Running marketplace subscription access check")
         marketplace_access_findings = check_marketplace_subscription_access(permission_cache)
