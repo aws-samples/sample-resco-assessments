@@ -337,7 +337,7 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
             row = f"""
                 <tr>
                     <td>Bedrock - {finding.get('Finding', 'N/A')}</td>
-                    <td>{finding.get('Finding Details', 'N/A')}</td>
+                    <td>{finding.get('Finding_Details', 'N/A')}</td>
                     <td>{finding.get('Resolution', 'N/A')}</td>
                     <td>{finding.get('Reference', 'N/A')}</td>
                     <td>{finding.get('Severity', 'Low')}</td>
@@ -351,7 +351,7 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
             row = f"""
                 <tr>
                     <td>SageMaker - {finding.get('Finding', 'N/A')}</td>
-                    <td>{finding.get('Finding Details', 'N/A')}</td>
+                    <td>{finding.get('Finding_Details', 'N/A')}</td>
                     <td>{finding.get('Resolution', 'N/A')}</td>
                     <td>{finding.get('Reference', 'N/A')}</td>
                     <td>{finding.get('Severity', 'Low')}</td>

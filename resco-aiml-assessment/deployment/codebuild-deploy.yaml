@@ -51,6 +51,12 @@ Resources:
                   - iam:*
                   - cloudformation:*
                   - sam:*
+              - Effect: Allow
+                Resource: '*'
+                Action:
+                  - states:StartExecution
+                  - states:DescribeExecution
+                  - states:ListExecutions
 
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
@@ -92,7 +98,20 @@ Resources:
             post_build:
               commands:
                 - sam deploy --stack-name ${PROJECT_NAME}-stack --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
-          
+                # Get the state machine ARN from CloudFormation outputs
+                - echo "Getting State Machine ARN from CloudFormation outputs"
+                - >
+                  STATE_MACHINE_ARN=$(aws cloudformation describe-stacks 
+                  --stack-name ${PROJECT_NAME}-stack 
+                  --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' 
+                  --output text)
+                # Start execution of the state machine
+                - echo "Starting Step Functions execution"
+                - >
+                  aws stepfunctions start-execution 
+                  --state-machine-arn $STATE_MACHINE_ARN 
+                  --input "{}"
+
       Cache:
         Type: NO_CACHE
       LogsConfig:

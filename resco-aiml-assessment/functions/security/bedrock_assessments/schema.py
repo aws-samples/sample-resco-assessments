@@ -2,8 +2,6 @@ from enum import Enum
 from typing import Dict, List, Any
 from pydantic import BaseModel, Field, HttpUrl, validator
 from datetime import datetime
-class Config:
-    strict = True  # Enables strict type checking
 
 class SeverityEnum(str, Enum):
     HIGH = "High"

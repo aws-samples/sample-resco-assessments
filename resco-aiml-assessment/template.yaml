@@ -117,6 +117,25 @@ Resources:
                 - iam:GetServiceLastAccessedDetails
                 - sts:GetCallerIdentity
               Resource: '*'
+            - Sid: BedrockAssessmentPermissions
+              Effect: Allow
+              Action:
+                - bedrock:ListGuardrails
+                - bedrock:GetGuardrail
+                - bedrock:ListModelInvocations
+                - bedrock:GetModelInvocationLoggingConfiguration
+                - bedrock:ListPrompts
+                - bedrock:GetPrompt
+                - bedrock:ListAgents
+                - bedrock:GetAgent
+              Resource: '*'
+            - Sid: CloudTrailPermissions
+              Effect: Allow
+              Action:
+                - cloudtrail:ListTrails
+                - cloudtrail:GetTrail
+                - cloudtrail:GetEventSelectors
+              Resource: '*'
             - Sid: LambdaPermissions
               Effect: Allow
               Action:
@@ -136,7 +155,7 @@ Resources:
                 - ec2:DescribeVpcs  # Added this permission
               Resource: '*'
   SagemakerSecurityAssessmentFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: SagemakerSecurityAssessment
       CodeUri: functions/security/sagemaker_assessments/

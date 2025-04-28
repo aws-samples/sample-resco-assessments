@@ -431,8 +431,6 @@ def check_sagemaker_iam_permissions(permission_cache) -> Dict[str, Any]:
                             status='Failed'
                         )
                     )
-
-
         else:
             findings['csv_data'].append(
                 create_finding(

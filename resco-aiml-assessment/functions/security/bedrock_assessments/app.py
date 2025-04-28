@@ -11,6 +11,8 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 import random
 import json
+from schema import create_finding
+
 # Configure boto3 with retries
 boto3_config = Config(
     retries = dict(
@@ -144,24 +146,27 @@ def check_marketplace_subscription_access(permission_cache) -> Dict[str, Any]:
             findings['details'] = f"Found {len(overly_permissive_identities)} identities with overly permissive marketplace subscription access"
             
             for identity in overly_permissive_identities:
-                findings['csv_data'].append({
-                    'Finding': 'Overly Permissive Marketplace Subscription Access',
-                    'Finding Details': f"{identity['type'].capitalize()} '{identity['name']}' has overly permissive marketplace subscription access through policy '{identity['policy']}'",
-                    'Resolution': "Ensure that users have access to only the models that you want user to be able to subscribe to based on your organizational policies. For example, you may want users to have access to only text based models and not image and video generation model. This can also help to keep cost in check.",
-                    'Reference': "https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-bedrock-marketplace",
-                    'Severity': 'Medium',
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Marketplace Subscription Access Check",
+                        finding_details=f"{identity['type'].capitalize()} '{identity['name']}' has overly permissive marketplace subscription access through policy '{identity['policy']}'",
+                        resolution="Ensure that users have access to only the models that you want user to be able to subscribe to based on your organizational policies. For example, you may want users to have access to only text based models and not image and video generation model. This can also help to keep cost in check.",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-bedrock-marketplace",
+                        severity='Medium',
+                        status='Failed'
+                    )
+            )
         else:
             findings['details'] = "No identities found with overly permissive marketplace subscription access"
-            findings['csv_data'].append({
-                'Finding': 'Marketplace Subscription Access Check',
-                'Finding Details': 'No identities found with overly permissive marketplace subscription access',
-                'Resolution': '',
-                'Reference': "https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-bedrock-marketplace",
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name="Marketplace Subscription Access Check",
+                    finding_details="No identities found with overly permissive marketplace subscription access",
+                    resolution="No action required",
+                    reference="https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-bedrock-marketplace",
+                    severity='N/A',
+                    status='Passed'
+                ))
 
         return findings
 
@@ -259,14 +264,16 @@ def check_stale_bedrock_access(permission_cache) -> Dict[str, Any]:
 
         if not identities_to_check:
             logger.info("No identities found with Bedrock access")
-            findings['csv_data'].append({
-                'Finding': 'Stale Bedrock Access Check',
-                'Finding Details': 'No identities found with Bedrock access',
-                'Resolution': '',
-                'Reference': "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name="Stale Bedrock Access Check",
+                    finding_details="No identities found with Bedrock access",
+                    resolution="No action required",
+                    reference="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
+                    severity='N/A',
+                    status='Passed'
+                )
+            )
             return findings
 
         # Check last accessed info for each identity
@@ -317,14 +324,17 @@ def check_stale_bedrock_access(permission_cache) -> Dict[str, Any]:
             
             for identity in stale_identities:
                 last_accessed_str = identity['last_accessed'].strftime('%Y-%m-%d') if identity['last_accessed'] else 'never'
-                findings['csv_data'].append({
-                    'Finding': 'Stale Bedrock Access',
-                    'Finding Details': f"{identity['type'].capitalize()} '{identity['name']}' last accessed Bedrock on {last_accessed_str}",
-                    'Resolution': "You can use last accessed information to refine your policies and allow access to only the services and actions that your IAM identities and policies use. This helps you to better adhere to the best practice of least privilege.",
-                    'Reference': "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
-                    'Severity': 'Medium',
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Stale Bedrock Access Check",
+                        finding_details=f"{identity['type'].capitalize()} '{identity['name']}' last accessed Bedrock on {last_accessed_str}",
+                        resolution="You can use last accessed information to refine your policies and allow access to only the services and actions that your IAM identities and policies use. This helps you to better adhere to the best practice of least privilege.",
+                        reference="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
+                        severity='Medium',
+                        status='Failed'
+                    )
+                )
+                
         else:
             active_details = []
             for identity in active_identities:
@@ -336,14 +346,16 @@ def check_stale_bedrock_access(permission_cache) -> Dict[str, Any]:
                 finding_details += ": " + "; ".join(active_details)
             
             findings['details'] = finding_details
-            findings['csv_data'].append({
-                'Finding': 'Stale Bedrock Access Check',
-                'Finding Details': finding_details,
-                'Resolution': '',
-                'Reference': "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name="Stale Bedrock Access Check",
+                    finding_details=finding_details,
+                    resolution="No action required",
+                    reference="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_last-accessed.html",
+                    severity='N/A',
+                    status='Passed'
+                )
+            )
 
         return findings
 
@@ -383,24 +395,28 @@ def check_bedrock_full_access_roles(permission_cache) -> Dict[str, Any]:
         findings['details'] = f"Found {len(bedrock_roles)} roles with AmazonBedrockFullAccess policy"
         
         for role in bedrock_roles:
-            findings['csv_data'].append({
-                'Finding': 'AmazonBedrockFullAccess role exists',
-                'Finding Details': f"Role '{role['name']}' has AmazonBedrockFullAccess policy attached",
-                'Resolution': 'Limit the AmazonBedrock policy only to required access',
-                'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-agent.html#iam-agents-ex-all\nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-br-studio.html',
-                'Severity': 'High',
-                'Status': 'Failed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name="AmazonBedrockFullAccess role check",
+                    finding_details=f"Role '{role['name']}' has AmazonBedrockFullAccess policy attached",
+                    resolution="Limit the AmazonBedrockFullAccess policy only to required access",
+                    reference="https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-agent.html#iam-agents-ex-all\nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-br-studio.html",
+                    severity='High',
+                    status='Failed'
+                )
+            )
     else:
         findings['details'] = "No roles found with AmazonBedrockFullAccess policy"
-        findings['csv_data'].append({
-            'Finding': 'AmazonBedrockFullAccess role check',
-            'Finding Details': 'No roles found with AmazonBedrockFullAccess policy',
-            'Resolution': '',
-            'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-agent.html#iam-agents-ex-all\nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-br-studio.html',
-            'Severity': 'N/A',
-            'Status': 'Passed'
-        })
+        findings['csv_data'].append(
+            create_finding(
+                finding_name="AmazonBedrockFullAccess role check",
+                finding_details="No roles found with AmazonBedrockFullAccess policy",
+                resolution="No action required",
+                reference="https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-agent.html#iam-agents-ex-all\nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples-br-studio.html",
+                severity='N/A',
+                status='Passed'
+            )
+        )
 
     return findings
 
@@ -628,14 +644,16 @@ def check_bedrock_access_and_vpc_endpoints(permission_cache) -> Dict[str, Any]:
                 else:
                     finding_detail = "No VPCs found in the account"
                 
-                findings['csv_data'].append({
-                    'Finding': 'Amazon Bedrock private connectivity not used',
-                    'Finding Details': finding_detail,
-                    'Resolution': 'Create a VPC endpoint in your VPC with any of the following Bedrock service endpoints that your application may be using:\n- com.amazonaws.region.bedrock\n- com.amazonaws.region.bedrock-runtime\n- com.amazonaws.region.bedrock-agent\n- com.amazonaws.region.bedrock-agent-runtime',
-                    'Reference': 'https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html',
-                    'Severity': 'Medium',
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name='Amazon Bedrock private connectivity not used',
+                        finding_details=finding_detail,
+                        resolution='Create a VPC endpoint in your VPC with any of the following Bedrock service endpoints that your application may be using:\n- com.amazonaws.region.bedrock\n- com.amazonaws.region.bedrock-runtime\n- com.amazonaws.region.bedrock-agent\n- com.amazonaws.region.bedrock-agent-runtime',
+                        reference='https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html',
+                        severity='Medium',
+                        status='Failed'
+                    )
+                    )
             else:
                 endpoint_details = []
                 for endpoint in vpc_endpoint_check['found_endpoints']:
@@ -654,14 +672,586 @@ def check_bedrock_access_and_vpc_endpoints(permission_cache) -> Dict[str, Any]:
             'details': f"Error during check: {str(e)}",
             'csv_data': []
         }
+    
+def check_bedrock_guardrails() -> Dict[str, Any]:
+    """
+    Check if Amazon Bedrock Guardrails are configured and being used
+    """
+    logger.debug("Starting check for Bedrock Guardrails configuration")
+    try:
+        findings = {
+            'check_name': 'Bedrock Guardrails Check',
+            'status': 'PASS',
+            'details': '',
+            'csv_data': []
+        }
 
+        bedrock_client = boto3.client('bedrock', config=boto3_config)
+        
+        try:
+            # List all guardrails
+            response = bedrock_client.list_guardrails()
+            
+            if response.get('guardrails', []):
+                guardrail_names = [guardrail['name'] for guardrail in response['guardrails']]
+                findings['details'] = f"Found {len(guardrail_names)} Bedrock guardrails configured"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock Guardrails Check",
+                        finding_details=f"Amazon Bedrock Guardrails are properly configured with {len(guardrail_names)} guardrails",
+                        resolution="No action required. Continue monitoring and updating guardrails as needed.",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html",
+                        severity='N/A',
+                        status='Passed'
+                    )
+                )
+            else:
+                findings['status'] = 'WARN'
+                findings['details'] = "No Bedrock guardrails configured"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock Guardrails Check",
+                        finding_details="No Amazon Bedrock Guardrails are configured. This may expose your application to potential risks such as harmful content, sensitive information disclosure, or hallucinations.",
+                        resolution="Configure Bedrock Guardrails to implement safeguards such as:\n- Content filters to block harmful content\n- Denied topics to prevent undesirable discussions\n- Sensitive information filters to protect PII\n- Contextual grounding checks to prevent hallucinations",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html",
+                        severity='Medium',
+                        status='Failed'
+                    )
+                )
+
+            # Check if guardrails are actually being used in any model invocations
+            if response.get('guardrails', []):
+                try:
+                    # Get a sample of recent invocations to check for guardrail usage
+                    model_invocations = bedrock_client.list_model_invocations(
+                        maxResults=20,  # Sample size
+                        filters={
+                            'createdAfter': (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+                        }
+                    )
+                    
+                    guardrail_usage_found = False
+                    for invocation in model_invocations.get('modelInvocations', []):
+                        if invocation.get('guardrailConfiguration'):
+                            guardrail_usage_found = True
+                            break
+                    
+                    if not guardrail_usage_found:
+                        findings['status'] = 'WARN'
+                        findings['csv_data'].append(
+                            create_finding(
+                                finding_name="Bedrock Guardrails Usage Check",
+                                finding_details="Guardrails are configured but not detected in recent model invocations. This suggests guardrails may not be actively enforced.",
+                                resolution="Ensure guardrails are properly integrated into your application code using the ApplyGuardrail API or through Bedrock Agents and Knowledge Bases.",
+                                reference="https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html",
+                                severity='Low',
+                                status='Failed'
+                            )
+                        )
+                except Exception as e:
+                    logger.warning(f"Could not check guardrail usage in invocations: {str(e)}")
+                
+        except bedrock_client.exceptions.ValidationException as e:
+            findings['status'] = 'ERROR'
+            findings['details'] = f"Error validating guardrails configuration: {str(e)}"
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name="Bedrock Guardrails Check",
+                    finding_details=f"Error checking Bedrock Guardrails configuration: {str(e)}",
+                    resolution="Verify your AWS credentials and permissions to access Bedrock Guardrails.",
+                    reference="https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html",
+                    severity='High',
+                    status='Failed'
+                )
+            )
+            
+        return findings
+
+    except Exception as e:
+        logger.error(f"Error in check_bedrock_guardrails: {str(e)}", exc_info=True)
+        return {
+            'check_name': 'Bedrock Guardrails Check',
+            'status': 'ERROR',
+            'details': f"Error during check: {str(e)}",
+            'csv_data': []
+        }
+
+
+def check_bedrock_logging_configuration() -> Dict[str, Any]:
+    """
+    Check if model invocation logging is enabled for Amazon Bedrock
+    """
+    logger.debug("Starting check for Bedrock model invocation logging configuration")
+    try:
+        findings = {
+            'check_name': 'Bedrock Model Invocation Logging Check',
+            'status': 'PASS',
+            'details': '',
+            'csv_data': []
+        }
+
+        bedrock_client = boto3.client('bedrock', config=boto3_config)
+        
+        try:
+            # Get current logging configuration
+            response = bedrock_client.get_model_invocation_logging_configuration()
+            
+            logging_enabled = False
+            enabled_destinations = []
+            
+            # Check S3 logging configuration
+            s3_config = response.get('loggingConfig', {}).get('s3Config')
+            if s3_config and s3_config.get('s3BucketName'):
+                logging_enabled = True
+                enabled_destinations.append('Amazon S3')
+            
+            # Check CloudWatch logging configuration
+            cloudwatch_config = response.get('loggingConfig', {}).get('cloudWatchConfig')
+            if cloudwatch_config and cloudwatch_config.get('logGroupName'):
+                logging_enabled = True
+                enabled_destinations.append('CloudWatch Logs')
+            
+            if logging_enabled:
+                findings['details'] = f"Model invocation logging is enabled with delivery to: {', '.join(enabled_destinations)}"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock Model Invocation Logging Check",
+                        finding_details=f"Model invocation logging is properly configured with delivery to: {', '.join(enabled_destinations)}",
+                        resolution="No action required",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html",
+                        severity='N/A',
+                        status='Passed'
+                    )
+                )
+            else:
+                findings['status'] = 'FAIL'
+                findings['details'] = "Model invocation logging is not enabled"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock Model Invocation Logging Check",
+                        finding_details="Model invocation logging is not enabled. This limits your ability to track and audit model usage.",
+                        resolution="Enable model invocation logging to collect invocation logs, model input data, and model output data. Configure logging to deliver to Amazon S3, CloudWatch Logs, or both for comprehensive monitoring.",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html",
+                        severity='Medium',
+                        status='Failed'
+                    )
+                )
+                
+        except bedrock_client.exceptions.ValidationException:
+            findings['status'] = 'FAIL'
+            findings['details'] = "Model invocation logging is not enabled"
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name="Bedrock Model Invocation Logging Check",
+                    finding_details="Model invocation logging is not enabled. This limits your ability to track and audit model usage.",
+                    resolution="Enable model invocation logging to collect invocation logs, model input data, and model output data. Configure logging to deliver to Amazon S3, CloudWatch Logs, or both for comprehensive monitoring.",
+                    reference="https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html",
+                    severity='Medium',
+                    status='Failed'
+                )
+            )
+            
+        return findings
+
+    except Exception as e:
+        logger.error(f"Error in check_bedrock_logging_configuration: {str(e)}", exc_info=True)
+        return {
+            'check_name': 'Bedrock Model Invocation Logging Check',
+            'status': 'ERROR',
+            'details': f"Error during check: {str(e)}",
+            'csv_data': []
+        }
+
+def check_bedrock_cloudtrail_logging() -> Dict[str, Any]:
+    """
+    Check if CloudTrail is configured to log Amazon Bedrock API calls
+    """
+    logger.debug("Starting check for Bedrock CloudTrail logging configuration")
+    try:
+        findings = {
+            'check_name': 'Bedrock CloudTrail Logging Check',
+            'status': 'PASS',
+            'details': '',
+            'csv_data': []
+        }
+
+        cloudtrail_client = boto3.client('cloudtrail', config=boto3_config)
+        
+        try:
+            # Get all trails
+            trails_response = cloudtrail_client.list_trails()
+            trails = trails_response.get('Trails', [])
+            
+            bedrock_logging_enabled = False
+            logging_trails = []
+            
+            for trail in trails:
+                trail_arn = trail['TrailARN']
+                trail_name = trail['Name']
+                
+                # Get trail configuration
+                trail_config = cloudtrail_client.get_trail(Name=trail_arn)
+                
+                # Check if trail is enabled and multi-region
+                if trail_config['Trail'].get('IsMultiRegionTrail') and \
+                   trail_config['Trail'].get('IsLogging', False):
+                    
+                    # Get event selectors
+                    event_selectors = cloudtrail_client.get_event_selectors(
+                        TrailName=trail_arn
+                    )
+                    
+                    # Check advanced event selectors if they exist
+                    advanced_selectors = event_selectors.get('AdvancedEventSelectors', [])
+                    basic_selectors = event_selectors.get('EventSelectors', [])
+                    
+                    # Check if Bedrock events are being logged
+                    for selector in advanced_selectors:
+                        field_selectors = selector.get('FieldSelectors', [])
+                        for field in field_selectors:
+                            if field.get('Field') == 'eventSource' and \
+                               'bedrock' in str(field.get('Equals', [])).lower():
+                                bedrock_logging_enabled = True
+                                logging_trails.append(trail_name)
+                                break
+                    
+                    # If no advanced selectors, check if logging all management events
+                    if not bedrock_logging_enabled and basic_selectors:
+                        for selector in basic_selectors:
+                            if selector.get('IncludeManagementEvents', False) and \
+                               selector.get('ReadWriteType', '') in ['All', 'Write']:
+                                bedrock_logging_enabled = True
+                                logging_trails.append(trail_name)
+                                break
+            
+            if bedrock_logging_enabled:
+                findings['details'] = f"CloudTrail logging enabled for Bedrock in trails: {', '.join(logging_trails)}"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock CloudTrail Logging Check",
+                        finding_details=f"CloudTrail is properly configured to log Bedrock API activity in trails: {', '.join(logging_trails)}",
+                        resolution="No action required. Continue monitoring CloudTrail logs for Bedrock activity.",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html",
+                        severity='N/A',
+                        status='Passed'
+                    )
+                )
+            else:
+                findings['status'] = 'FAIL'
+                findings['details'] = "No CloudTrail trails configured to log Bedrock activity"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock CloudTrail Logging Check",
+                        finding_details="CloudTrail is not configured to log Amazon Bedrock API calls. This limits your ability to audit and monitor Bedrock usage.",
+                        resolution="Enable CloudTrail logging for Bedrock by either:\n" + 
+                                 "1. Configuring an advanced event selector for Bedrock events, or\n" +
+                                 "2. Enabling management events logging in a multi-region trail",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html",
+                        severity='High',
+                        status='Failed'
+                    )
+                )
+
+        except cloudtrail_client.exceptions.ClientError as e:
+            findings['status'] = 'ERROR'
+            findings['details'] = f"Error checking CloudTrail configuration: {str(e)}"
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name="Bedrock CloudTrail Logging Check",
+                    finding_details=f"Error checking CloudTrail configuration for Bedrock logging: {str(e)}",
+                    resolution="Verify your AWS credentials and permissions to access CloudTrail.",
+                    reference="https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html",
+                    severity='High',
+                    status='Failed'
+                )
+            )
+            
+        return findings
+
+    except Exception as e:
+        logger.error(f"Error in check_bedrock_cloudtrail_logging: {str(e)}", exc_info=True)
+        return {
+            'check_name': 'Bedrock CloudTrail Logging Check',
+            'status': 'ERROR',
+            'details': f"Error during check: {str(e)}",
+            'csv_data': []
+        }
+    
+def check_bedrock_prompt_management() -> Dict[str, Any]:
+    """
+    Check if Amazon Bedrock Prompt Management feature is being used
+    """
+    logger.debug("Starting check for Bedrock Prompt Management usage")
+    try:
+        findings = {
+            'check_name': 'Bedrock Prompt Management Check',
+            'status': 'PASS',
+            'details': '',
+            'csv_data': []
+        }
+
+        bedrock_client = boto3.client('bedrock-agent', config=boto3_config)
+        
+        try:
+            # List all prompts
+            response = bedrock_client.list_prompts()
+            prompts = response.get('promptSummaries', [])
+            
+            if prompts:
+                # Count prompts by status
+                active_prompts = [p for p in prompts if p.get('status') == 'ACTIVE']
+                draft_prompts = [p for p in prompts if p.get('status') == 'DRAFT']
+                
+                findings['details'] = f"Found {len(prompts)} prompts ({len(active_prompts)} active, {len(draft_prompts)} draft)"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock Prompt Management Check",
+                        finding_details=f"Prompt Management is being used with {len(prompts)} prompts ({len(active_prompts)} active, {len(draft_prompts)} draft)",
+                        resolution="No action required. Continue using Prompt Management for consistent and optimized prompts.",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-management.html",
+                        severity='N/A',
+                        status='Passed'
+                    )
+                )
+                
+                # Additional check for prompt variants
+                prompts_without_variants = []
+                for prompt in prompts:
+                    try:
+                        prompt_details = bedrock_client.get_prompt(
+                            promptId=prompt['promptId']
+                        )
+                        if len(prompt_details.get('variants', [])) <= 1:
+                            prompts_without_variants.append(prompt['name'])
+                    except Exception as e:
+                        logger.warning(f"Could not get details for prompt {prompt['name']}: {str(e)}")
+                
+                if prompts_without_variants:
+                    findings['status'] = 'WARN'
+                    findings['csv_data'].append(
+                        create_finding(
+                            finding_name="Bedrock Prompt Variants Check",
+                            finding_details=f"Found {len(prompts_without_variants)} prompts without multiple variants. Testing different prompt variants helps optimize responses.",
+                            resolution="Create and test multiple variants for your prompts to find the most effective configurations.",
+                            reference="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-management.html",
+                            severity='Low',
+                            status='Failed'
+                        )
+                    )
+            else:
+                findings['status'] = 'WARN'
+                findings['details'] = "Prompt Management feature is not being used"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock Prompt Management Check",
+                        finding_details="Prompt Management feature is not being used. This may lead to inconsistent prompt handling and suboptimal model responses.",
+                        resolution="Implement Prompt Management to:\n" +
+                                 "1. Create and version your prompts\n" +
+                                 "2. Test different prompt variants\n" +
+                                 "3. Share prompts across your organization\n" +
+                                 "4. Maintain consistent prompt templates",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-management.html",
+                        severity='Medium',
+                        status='Failed'
+                    )
+                )
+
+        except bedrock_client.exceptions.ValidationException as e:
+            findings['status'] = 'ERROR'
+            findings['details'] = f"Error checking Prompt Management: {str(e)}"
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name="Bedrock Prompt Management Check",
+                    finding_details=f"Error checking Bedrock Prompt Management configuration: {str(e)}",
+                    resolution="Verify your AWS credentials and permissions to access Bedrock Prompt Management.",
+                    reference="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-management.html",
+                    severity='High',
+                    status='Failed'
+                )
+            )
+            
+        return findings
+
+    except Exception as e:
+        logger.error(f"Error in check_bedrock_prompt_management: {str(e)}", exc_info=True)
+        return {
+            'check_name': 'Bedrock Prompt Management Check',
+            'status': 'ERROR',
+            'details': f"Error during check: {str(e)}",
+            'csv_data': []
+        }
+
+def check_bedrock_agent_roles(permission_cache) -> Dict[str, Any]:
+    """
+    Check IAM roles associated with Bedrock agents for least privilege access
+    """
+    logger.debug("Starting check for Bedrock agent IAM roles")
+    try:
+        findings = {
+            'check_name': 'Bedrock Agent IAM Roles Check',
+            'status': 'PASS',
+            'details': '',
+            'csv_data': []
+        }
+
+        bedrock_client = boto3.client('bedrock-agent', config=boto3_config)
+        
+        try:
+            # Get all Bedrock agents
+            response = bedrock_client.list_agents()
+            agents = response.get('agents', [])
+            
+            if not agents:
+                findings['details'] = "No Bedrock agents found"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock Agent IAM Roles Check",
+                        finding_details="No Bedrock agents found in the account",
+                        resolution="No action required",
+                        reference="https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_service-with-iam.html",
+                        severity='N/A',
+                        status='Passed'
+                    )
+                )
+                return findings
+
+            issues_found = []
+            
+            for agent in agents:
+                agent_id = agent.get('agentId')
+                agent_name = agent.get('agentName')
+                
+                # Get agent details including role ARN
+                agent_details = bedrock_client.get_agent(
+                    agentId=agent_id
+                )
+                
+                role_arn = agent_details.get('agentResourceRoleArn')
+                if not role_arn:
+                    continue
+                
+                role_name = role_arn.split('/')[-1]
+                
+                # Check role in permission cache
+                if role_name in permission_cache["role_permissions"]:
+                    role_info = permission_cache["role_permissions"][role_name]
+                    
+                    # Check for overly permissive policies
+                    has_full_access = False
+                    has_permission_boundary = bool(role_info.get('permission_boundary'))
+                    has_vpc_condition = False
+                    has_specific_resources = True
+                    
+                    # Check attached policies
+                    for policy in role_info['attached_policies']:
+                        if 'BedrockFullAccess' in policy['name']:
+                            has_full_access = True
+                        
+                        # Check policy document for resource constraints and conditions
+                        doc = policy.get('document', {})
+                        for statement in doc.get('Statement', []):
+                            if statement.get('Effect') == 'Allow':
+                                # Check for resource constraints
+                                resources = statement.get('Resource', [])
+                                if resources == ['*']:
+                                    has_specific_resources = False
+                                
+                                # Check for VPC conditions
+                                conditions = statement.get('Condition', {})
+                                if any('vpc' in str(c).lower() for c in conditions.values()):
+                                    has_vpc_condition = True
+                    
+                    # Check inline policies
+                    for policy in role_info['inline_policies']:
+                        doc = policy.get('document', {})
+                        for statement in doc.get('Statement', []):
+                            if statement.get('Effect') == 'Allow':
+                                resources = statement.get('Resource', [])
+                                if resources == ['*']:
+                                    has_specific_resources = False
+                                
+                                conditions = statement.get('Condition', {})
+                                if any('vpc' in str(c).lower() for c in conditions.values()):
+                                    has_vpc_condition = True
+                    
+                    # Collect issues
+                    role_issues = []
+                    if has_full_access:
+                        role_issues.append("uses full access policy")
+                    if not has_specific_resources:
+                        role_issues.append("lacks specific resource constraints")
+                    if not has_permission_boundary:
+                        role_issues.append("missing permission boundary")
+                    if not has_vpc_condition:
+                        role_issues.append("missing VPC conditions")
+                    
+                    if role_issues:
+                        issues_found.append(f"Agent '{agent_name}' role '{role_name}' {', '.join(role_issues)}")
+            
+            if issues_found:
+                findings['status'] = 'FAIL'
+                findings['details'] = f"Found {len(issues_found)} roles with least privilege issues"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock Agent IAM Roles Check",
+                        finding_details=f"IAM roles associated with Bedrock agents have least privilege issues:\n" + 
+                                      "\n".join(f"- {issue}" for issue in issues_found),
+                        resolution="1. Replace full access policies with scoped policies\n" +
+                                 "2. Specify exact resource ARNs instead of using wildcards\n" +
+                                 "3. Apply permission boundaries to limit maximum permissions\n" +
+                                 "4. Add VPC conditions to restrict access to specific networks\n" +
+                                 "5. Review and update role trust policies",
+                        reference="https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/gensec05-bp01.html",
+                        severity='High',
+                        status='Failed'
+                    )
+                )
+            else:
+                findings['details'] = f"All {len(agents)} Bedrock agent roles follow least privilege principles"
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name="Bedrock Agent IAM Roles Check",
+                        finding_details=f"All {len(agents)} Bedrock agent roles properly implement least privilege access",
+                        resolution="No action required",
+                        reference="https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/gensec05-bp01.html",
+                        severity='N/A',
+                        status='Passed'
+                    )
+                )
+
+        except bedrock_client.exceptions.ValidationException as e:
+            findings['status'] = 'ERROR'
+            findings['details'] = f"Error checking Bedrock agents: {str(e)}"
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name="Bedrock Agent IAM Roles Check",
+                    finding_details=f"Error checking Bedrock agent configurations: {str(e)}",
+                    resolution="Verify your AWS credentials and permissions to access Bedrock agents.",
+                    reference="https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/gensec05-bp01.html",
+                    severity='High',
+                    status='Failed'
+                )
+            )
+            
+        return findings
+
+    except Exception as e:
+        logger.error(f"Error in check_bedrock_agent_roles: {str(e)}", exc_info=True)
+        return {
+            'check_name': 'Bedrock Agent IAM Roles Check',
+            'status': 'ERROR',
+            'details': f"Error during check: {str(e)}",
+            'csv_data': []
+        }
+
+    
 def generate_csv_report(findings: List[Dict[str, Any]]) -> str:
     """
     Generate CSV report from all security check findings
     """
     logger.debug("Generating CSV report")
     csv_buffer = StringIO()
-    fieldnames = ['Finding', 'Finding Details', 'Resolution', 'Reference', 'Severity', 'Status']
+    fieldnames = ['Finding', 'Finding_Details', 'Resolution', 'Reference', 'Severity', 'Status']
     writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
     
     writer.writeheader()
@@ -725,6 +1315,26 @@ def lambda_handler(event, context):
         logger.info("Running marketplace subscription access check")
         marketplace_access_findings = check_marketplace_subscription_access(permission_cache)
         all_findings.append(marketplace_access_findings)
+        
+        logger.info("Running Bedrock logging findings check")
+        bedrock_logging_findings = check_bedrock_logging_configuration()
+        all_findings.append(bedrock_logging_findings)
+
+        logger.info("Running Bedrock Guardrails check")
+        bedrock_guardrails_findings = check_bedrock_guardrails()
+        all_findings.append(bedrock_guardrails_findings)
+
+        logger.info("Running Bedrock CloudTrail logging check")
+        bedrock_cloudtrail_findings = check_bedrock_cloudtrail_logging()
+        all_findings.append(bedrock_cloudtrail_findings)
+
+        logger.info("Running Bedrock Prompt Management check")
+        bedrock_prompt_management_findings = check_bedrock_prompt_management()
+        all_findings.append(bedrock_prompt_management_findings)
+
+        logger.info("Running Bedrock agent IAM roles check")
+        bedrock_agent_roles_findings = check_bedrock_agent_roles(permission_cache)
+        all_findings.append(bedrock_agent_roles_findings)
         
         # Generate and upload report
         logger.info("Generating CSV report")
