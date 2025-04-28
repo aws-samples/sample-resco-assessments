@@ -4,8 +4,10 @@ from pydantic import BaseModel, Field, HttpUrl, validator
 from datetime import datetime
 
 class SeverityEnum(str, Enum):
-    INFORMATIONAL = "Informational"
-    WARNING = "Warning"
+    HIGH = "High"
+    MEDIUM = "Medium"
+    LOW = "Low"
+    NA = "N/A"
 
 class StatusEnum(str, Enum):
     FAILED = "Failed"
@@ -15,8 +17,8 @@ class Finding(BaseModel):
     """Represents a security finding with required fields and validations"""
     Finding: str = Field(..., min_length=1, description="The name/title of the finding")
     Finding_Details: str = Field(..., min_length=1, description="Detailed description of the finding")
-    Resolution: str = Field(..., min_length=1, description="Steps to resolve the finding")
-    Reference: HttpUrl = Field(..., description="Documentation reference URL")
+    Resolution: str = Field(..., min_length=0, description="Steps to resolve the finding")
+    Reference: str = Field(..., description="Documentation reference URL")
     Severity: SeverityEnum = Field(..., description="Severity level of the finding")
     Status: StatusEnum = Field(..., description="Current status of the finding")
 
@@ -26,14 +28,18 @@ class Finding(BaseModel):
         if not str(v).startswith('https://'):
             raise ValueError('Reference URL must start with https://')
         return v
-
-class AssessmentResults(BaseModel):
-    """Represents the complete assessment results structure"""
-    execution_id: str
-    timestamp: datetime
-    summary: Dict[str, Any]
-    bedrock: Dict[str, List[Finding]]
-    sagemaker: Dict[str, List[Finding]]
+    @validator('Severity')
+    def validate_severity(cls, v):
+        """Validate that severity is one of the allowed values"""
+        if v not in SeverityEnum.__members__.values():
+            raise ValueError('Severity must be one of the allowed values')
+        return v
+    @validator('Status')
+    def validate_status(cls, v):
+        """Validate that status is one of the allowed values"""
+        if v not in StatusEnum.__members__.values():
+            raise ValueError('Status must be one of the allowed values')
+        return v
 
 # Example usage:
 def create_finding(
@@ -61,7 +67,7 @@ def create_finding(
     Raises:
         ValidationError: If any field fails validation
     """
-    return Finding(
+    finding = Finding(
         Finding=finding_name,
         Finding_Details=finding_details,
         Resolution=resolution,
@@ -69,3 +75,4 @@ def create_finding(
         Severity=severity,
         Status=status
     )
+    return dict(finding.model_dump())  # Convert to regular dictionary

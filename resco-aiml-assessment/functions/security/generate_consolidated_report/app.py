@@ -213,10 +213,10 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
                 color: #28a745;
                 font-weight: bold;
             }}
-            .status-open {{
+            .status-failed {{
                 color: #dc3545;
             }}
-            .status-resolved {{
+            .status-passed {{
                 color: #28a745;
             }}
             .timestamp {{
@@ -316,7 +316,7 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
                             targets: 5, // Status column
                             render: function(data, type, row) {{
                                 if (type === 'display') {{
-                                    const statusClass = data.toLowerCase() === 'open' ? 'status-open' : 'status-resolved';
+                                    const statusClass = data.toLowerCase() === 'failed' ? 'status-failed' : 'status-passed';
                                     return `<span class="${{statusClass}}">${{data}}</span>`;
                                 }}
                                 return data;

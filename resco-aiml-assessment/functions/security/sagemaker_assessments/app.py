@@ -79,9 +79,6 @@ def check_sagemaker_internet_access() -> Dict[str, Any]:
     logger.debug("Starting check for SageMaker direct internet access")
     try:
         findings = {
-            'check_name': 'SageMaker Internet Access Check',
-            'status': 'PASS',
-            'details': '',
             'csv_data': []
         }
 
@@ -144,40 +141,37 @@ def check_sagemaker_internet_access() -> Dict[str, Any]:
             
             # Add findings for notebook instances
             for instance in instances_with_direct_access:
-                findings['csv_data'].append({
-                    'Finding': 'Direct Internet Access Enabled',
-                    'Finding Details': f"SageMaker notebook instance '{instance['name']}' has direct internet access enabled",
-                    'Resolution': "Configure the notebook instance to use VPC connectivity and disable direct internet access",
-                    'Reference': "https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html",
-                    'Severity': 'High',
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(create_finding(
+                    finding_name='Direct Internet Access Enabled',
+                    finding_details=f"SageMaker notebook instance '{instance_name}' has direct internet access enabled",
+                    resolution="Configure the notebook instance to use VPC connectivity and disable direct internet access",
+                    reference="https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html",
+                    severity='High',
+                    status='Failed'
+                    )
+                )
             
             # Add findings for domains
             for domain in domains_with_direct_access:
-                findings['csv_data'].append({
-                    'Finding': 'Non-VPC Only Network Access',
-                    'Finding Details': f"SageMaker domain '{domain['domain_id']}' ({domain['name']}) is not configured for VPC-only access",
-                    'Resolution': "Configure the SageMaker domain to use VPC-only network access type",
-                    'Reference': "https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html",
-                    'Severity': 'High',
-                    'Status': 'Failed'
-                })
-            
-            findings['details'] = (
-                f"Found {len(instances_with_direct_access)} notebook instances with direct internet access and "
-                f"{len(domains_with_direct_access)} domains without VPC-only access"
-            )
+                findings['csv_data'].append(create_finding(
+                    finding_name='Non-VPC Only Network Access',
+                    finding_details=f"SageMaker domain '{domain_id}' ({domain_name}) is not configured for VPC-only access",
+                    resolution="Configure the SageMaker domain to use VPC-only network access type",
+                    reference="https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html",
+                    severity='High',
+                    status='Failed'
+                    )
+                )
         else:
             findings['details'] = "No SageMaker resources found with direct internet access"
-            findings['csv_data'].append({
-                'Finding': 'SageMaker Internet Access Check',
-                'Finding Details': 'All SageMaker resources are properly configured to use VPC connectivity',
-                'Resolution': '',
-                'Reference': "https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html",
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(create_finding(
+                finding_name= 'SageMaker Internet Access Check',
+                finding_details= 'All SageMaker resources are properly configured to use VPC connectivity',
+                resolution='',
+                reference="https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html",
+                severity='N/A',
+                status='Passed'
+            ))
 
         return findings
 
@@ -211,26 +205,27 @@ def check_guardduty_enabled() -> Dict[str, Any]:
         detectors = guardduty_client.list_detectors()
         
         if not detectors.get('DetectorIds'):
-            findings['status'] = 'FAIL'
-            findings['details'] = "GuardDuty is not enabled in this account"
-            findings['csv_data'].append({
-                'Finding': 'GuardDuty Not Enabled',
-                'Finding Details': 'Amazon GuardDuty is not enabled in this account. GuardDuty can help detect security threats in SageMaker workloads.',
-                'Resolution': 'Enable Amazon GuardDuty to monitor for potential security threats in your SageMaker environment, including anomalous model access patterns and potential data exfiltration attempts.',
-                'Reference': 'https://docs.aws.amazon.com/guardduty/latest/ug/ai-protection.html',
-                'Severity': 'High',
-                'Status': 'Failed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name='GuardDuty Not Enabled',
+                    finding_details='Amazon GuardDuty is not enabled in this account. GuardDuty can help detect security threats in SageMaker workloads.',
+                    resolution='Enable Amazon GuardDuty to monitor for potential security threats in your SageMaker environment, including anomalous model access patterns and potential data exfiltration attempts.',
+                    reference='https://docs.aws.amazon.com/guardduty/latest/ug/ai-protection.html',
+                    severity='High',
+                    status='Failed'
+                )
+            )
         else:
-            findings['details'] = "GuardDuty is enabled and monitoring for security threats"
-            findings['csv_data'].append({
-                'Finding': 'GuardDuty Enabled',
-                'Finding Details': 'Amazon GuardDuty is properly enabled and monitoring for security threats in SageMaker workloads',
-                'Resolution': '',
-                'Reference': 'https://docs.aws.amazon.com/guardduty/latest/ug/ai-protection.html',
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name='GuardDuty Enabled',
+                    finding_details='Amazon GuardDuty is properly enabled and monitoring for security threats in SageMaker workloads.',
+                    resolution='',
+                    reference='https://docs.aws.amazon.com/guardduty/latest/ug/ai-protection.html',
+                    severity='N/A',
+                    status='Passed'
+                )
+            )
             
             # Check if SageMaker protection is enabled
             detector_id = detectors['DetectorIds'][0]
@@ -246,42 +241,42 @@ def check_guardduty_enabled() -> Dict[str, Any]:
                         break
                 
                 if not sagemaker_protection_enabled:
-                    findings['status'] = 'WARN'
-                    findings['csv_data'].append({
-                        'Finding': 'GuardDuty SageMaker Protection Not Enabled',
-                        'Finding Details': 'GuardDuty Runtime Monitoring for SageMaker is not enabled. This feature helps detect threats in SageMaker runtime operations.',
-                        'Resolution': 'Enable Runtime Monitoring in GuardDuty to monitor SageMaker workloads for potential security threats.',
-                        'Reference': 'https://docs.aws.amazon.com/guardduty/latest/ug/runtime-monitoring.html',
-                        'Severity': 'Medium',
-                        'Status': 'Failed'
-                    })
+                    findings['csv_data'].append(
+                        create_finding(
+                            finding_name='SageMaker Protection Not Enabled',
+                            finding_details='SageMaker protection is not enabled in Amazon GuardDuty. This feature helps detect threats in SageMaker runtime operations.',
+                            resolution='Enable SageMaker protection in GuardDuty to monitor for potential security threats in your SageMaker environment.',
+                            reference='https://docs.aws.amazon.com/guardduty/latest/ug/runtime-monitoring.html',
+                            severity='Medium',
+                            status='Failed'
+                        ))
             except ClientError as e:
                 logger.warning(f"Could not check GuardDuty features: {str(e)}")
                 
     except ClientError as e:
         error_code = e.response['Error']['Code']
         error_message = e.response['Error']['Message']
-        findings['status'] = 'ERROR'
-        findings['details'] = f"Error checking GuardDuty status: {error_code} - {error_message}"
-        findings['csv_data'].append({
-            'Finding': 'GuardDuty Check Error',
-            'Finding Details': f"Error checking GuardDuty status: {error_code} - {error_message}",
-            'Resolution': 'Ensure proper IAM permissions to check GuardDuty status',
-            'Reference': 'https://docs.aws.amazon.com/guardduty/latest/ug/security-iam.html',
-            'Severity': 'High',
-            'Status': 'Failed'
-        })
+        findings['csv_data'].append(
+            create_finding(
+                finding_name='GuardDuty Check Error',
+                finding_details=f"Error checking GuardDuty status: {error_code} - {error_message}",
+                resolution='Ensure proper IAM permissions to check GuardDuty status',
+                reference='https://docs.aws.amazon.com/guardduty/latest/ug/security-iam.html',
+                severity='High',
+                status='Failed'
+            )
+            )
     except Exception as e:
-        findings['status'] = 'ERROR'
-        findings['details'] = f"Unexpected error checking GuardDuty status: {str(e)}"
-        findings['csv_data'].append({
-            'Finding': 'GuardDuty Check Error',
-            'Finding Details': f"Unexpected error checking GuardDuty status: {str(e)}",
-            'Resolution': 'Investigate and resolve the unexpected error',
-            'Reference': 'https://docs.aws.amazon.com/guardduty/latest/ug/what-is-guardduty.html',
-            'Severity': 'High',
-            'Status': 'Failed'
-        })
+        findings['csv_data'].append(
+            create_finding(
+                finding_name='GuardDuty Check Error',
+                finding_details=f"Unexpected error checking GuardDuty status: {str(e)}",
+                resolution='Investigate and resolve the unexpected error',
+                reference='https://docs.aws.amazon.com/guardduty/latest/ug/what-is-guardduty.html',
+                severity='High',
+                status='Failed'    
+            )
+        )
         
     return findings
 
@@ -292,9 +287,6 @@ def check_sagemaker_iam_permissions(permission_cache) -> Dict[str, Any]:
     logger.debug("Starting check for SageMaker IAM permissions")
     try:
         findings = {
-            'check_name': 'SageMaker IAM Permissions Check',
-            'status': 'PASS',
-            'details': '',
             'csv_data': []
         }
 
@@ -392,62 +384,66 @@ def check_sagemaker_iam_permissions(permission_cache) -> Dict[str, Any]:
 
 
         # Generate findings
-        if roles_with_full_access or stale_users or not sso_enabled:
-            findings['status'] = 'WARN'
+        if roles_with_full_access or stale_users:
             
             # Findings for full access roles
             if roles_with_full_access:
                 for role_name in roles_with_full_access:
-                    findings['csv_data'].append({
-                        'Finding': 'SageMaker Full Access Policy Used',
-                        'Finding Details': f"Role '{role_name}' has AmazonSageMakerFullAccess policy attached",
-                        'Resolution': "Replace AmazonSageMakerFullAccess with more restrictive custom policies that follow the principle of least privilege",
-                        'Reference': "https://docs.aws.amazon.com/sagemaker-unified-studio/latest/adminguide/security-iam.html",
-                        'Severity': 'High',
-                        'Status': 'Failed'
-                    })
+                    findings['csv_data'].append(create_finding(
+                        finding_name='SageMaker Full Access Policy Used',
+                        finding_details=f"Role '{role_name}' has AmazonSageMakerFullAccess policy attached",
+                        resolution="Replace AmazonSageMakerFullAccess with more restrictive custom policies that follow the principle of least privilege",
+                        reference="https://docs.aws.amazon.com/sagemaker-unified-studio/latest/adminguide/security-iam.html",
+                        severity='High',
+                        status='Failed'
+                    )
+                )
 
             # Findings for stale users
             if stale_users:
                 for user in stale_users:
-                    findings['csv_data'].append({
-                        'Finding': 'Stale SageMaker Access',
-                        'Finding Details': f"User '{user['name']}' hasn't accessed SageMaker since {user['last_accessed'].strftime('%Y-%m-%d')}",
-                        'Resolution': "Review and remove SageMaker access for inactive users",
-                        'Reference': "https://docs.aws.amazon.com/sagemaker-unified-studio/latest/adminguide/security-iam.html",
-                        'Severity': 'Medium',
-                        'Status': 'Failed'
-                    })
+                    findings['csv_data'].append(create_finding(
+                        finding_name='Stale SageMaker Access',
+                        finding_details=f"User '{user["user_name"]}' hasn't accessed SageMaker since {last_accessed.strftime('%Y-%m-%d')}",
+                        resolution="Review and remove SageMaker access for inactive users",
+                        reference="https://docs.aws.amazon.com/sagemaker-unified-studio/latest/adminguide/security-iam.html",
+                        severity='Medium',
+                        status='Failed'
+                    )
+                )
 
             # Findings for SSO
             if domains_without_sso:
                 for domain in domains_without_sso:
-                    findings['csv_data'].append({
-                        'Finding': 'SSO Not Properly Configured',
-                        'Finding Details': (
-                            f"SageMaker domain '{domain['domain_id']}' ({domain['domain_name']}) "
-                            f"is using authentication mode: {domain['auth_mode']}"
-                        ),
-                        'Resolution': (
-                            "Enable and properly configure AWS IAM Identity Center (successor to AWS SSO) "
-                            "for centralized access management. Ensure Identity Store ID is configured."
-                        ),
-                        'Reference': "https://aws.amazon.com/blogs/machine-learning/team-and-user-management-with-amazon-sagemaker-and-aws-sso/",
-                        'Severity': 'Medium',
-                        'Status': 'Failed'
-                    })
+                    findings['csv_data'].append(
+                        create_finding(
+                            finding_name="SSO Not Properly Configured",
+                            finding_details=(
+                                f"SageMaker domain '{domain['domain_id']}' ({domain['domain_name']}) "
+                                f"is using authentication mode: {domain['auth_mode']}"
+                            ),
+                            resolution=(
+                                "Enable and properly configure AWS IAM Identity Center (successor to AWS SSO) "
+                                "for centralized access management. Ensure Identity Store ID is configured."
+                            ),
+                            reference="https://aws.amazon.com/blogs/machine-learning/team-and-user-management-with-amazon-sagemaker-and-aws-sso/",
+                            severity='Medium',
+                            status='Failed'
+                        )
+                    )
 
 
         else:
-            findings['details'] = "All SageMaker IAM permissions are properly configured"
-            findings['csv_data'].append({
-                'Finding': 'SageMaker IAM Permissions Check',
-                'Finding Details': 'No issues found with IAM permissions, SSO is enabled, and no stale access detected',
-                'Resolution': '',
-                'Reference': "https://docs.aws.amazon.com/sagemaker-unified-studio/latest/adminguide/security-iam.html",
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name='SageMaker IAM Permissions Check',
+                    finding_details='No issues found with IAM permissions, SSO is enabled, and no stale access detected',
+                    resolution='',
+                    reference="https://docs.aws.amazon.com/sagemaker-unified-studio/latest/adminguide/security-iam.html",
+                    severity='N/A',
+                    status='Passed'
+                )
+            )
 
         return findings
 
@@ -497,16 +493,13 @@ def get_account_id() -> str:
         logger.error(f"Error getting account ID: {str(e)}")
         raise
 
-def check_sagemaker_data_protection(permission_cache) -> Dict[str, Any]:
+def check_sagemaker_data_protection() -> Dict[str, Any]:
     """
     Check SageMaker data protection configurations including encryption at rest and in transit
     """
     logger.debug("Starting check for SageMaker data protection")
     try:
         findings = {
-            'check_name': 'SageMaker Data Protection Check',
-            'status': 'PASS',
-            'details': '',
             'csv_data': []
         }
 
@@ -623,65 +616,63 @@ def check_sagemaker_data_protection(permission_cache) -> Dict[str, Any]:
 
         # Generate findings
         if resources_without_encryption or resources_with_aws_managed_keys or resources_without_vpc_encryption:
-            findings['status'] = 'WARN'
             
             # Resources without encryption
             for resource in resources_without_encryption:
-                findings['csv_data'].append({
-                    'Finding': 'Missing Encryption Configuration',
-                    'Finding Details': f"{resource['type']} '{resource['name']}' - {resource['issue']}",
-                    'Resolution': "Configure encryption using AWS KMS customer managed keys for enhanced security",
-                    'Reference': "https://docs.aws.amazon.com/sagemaker/latest/dg/key-management.html",
-                    'Severity': 'High',
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name='Missing Encryption Configuration',
+                        finding_details=f"{resource['type']} '{resource['name']}' - {resource['issue']}",
+                        resolution="Configure encryption using AWS KMS customer managed keys for enhanced security",
+                        reference="https://docs.aws.amazon.com/sagemaker/latest/dg/key-management.html",
+                        severity='High',
+                        status='Failed'
+                    )
+                )
 
             # Resources using AWS managed keys
             for resource in resources_with_aws_managed_keys:
-                findings['csv_data'].append({
-                    'Finding': 'AWS Managed Key Usage',
-                    'Finding Details': f"{resource['type']} '{resource['name']}' uses AWS managed key {resource['key_id']}",
-                    'Resolution': "Consider using customer managed keys for better control over encryption",
-                    'Reference': "https://docs.aws.amazon.com/sagemaker/latest/dg/key-management.html",
-                    'Severity': 'Low',
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name='AWS Managed Key Usage',
+                        finding_details=f"{resource['type']} '{resource['name']}' uses AWS managed key {resource['key_id']}",
+                        resolution="Consider using customer managed keys for better control over encryption",
+                        reference="https://docs.aws.amazon.com/sagemaker/latest/dg/key-management.html",
+                        severity='Low',
+                        status='Failed'
+                    )
+                )
 
             # Resources without VPC encryption
             for resource in resources_without_vpc_encryption:
-                findings['csv_data'].append({
-                    'Finding': 'Missing VPC Traffic Encryption',
-                    'Finding Details': f"{resource['type']} '{resource['name']}' - {resource['issue']}",
-                    'Resolution': "Enable encryption for inter-container traffic and VPC communication",
-                    'Reference': "https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-in-transit.html",
-                    'Severity': 'Medium',
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name='Missing VPC Encryption',
+                        finding_details=f"{resource['type']} '{resource['name']}' - {resource['issue']}",
+                        resolution="Enable encryption for inter-container traffic and VPC communication",
+                        reference="https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-in-transit.html",
+                        severity='Medium',
+                        status='Failed'
+                    )
+                    )
 
-            findings['details'] = (
-                f"Found {len(resources_without_encryption)} resources without encryption, "
-                f"{len(resources_with_aws_managed_keys)} using AWS managed keys, and "
-                f"{len(resources_without_vpc_encryption)} without VPC traffic encryption"
-            )
         else:
-            findings['details'] = "All SageMaker resources are properly encrypted"
-            findings['csv_data'].append({
-                'Finding': 'Data Protection Check',
-                'Finding Details': 'All resources use appropriate encryption configurations',
-                'Resolution': '',
-                'Reference': "https://docs.aws.amazon.com/sagemaker/latest/dg/security.html",
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name='Data Protection Check',
+                    finding_details='All resources use appropriate encryption configurations',
+                    resolution='',
+                    reference="https://docs.aws.amazon.com/sagemaker/latest/dg/security.html",
+                    severity='N/A',
+                    status='Passed'
+                )
+            )
 
         return findings
 
     except Exception as e:
         logger.error(f"Error in check_sagemaker_data_protection: {str(e)}", exc_info=True)
         return {
-            'check_name': 'SageMaker Data Protection Check',
-            'status': 'ERROR',
-            'details': f"Error during check: {str(e)}",
             'csv_data': []
         }
 
@@ -693,9 +684,6 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
     logger.debug("Starting check for SageMaker MLOps features utilization")
     try:
         findings = {
-            'check_name': 'SageMaker MLOps Features Utilization Check',
-            'status': 'PASS',
-            'details': '',
             'csv_data': []
         }
 
@@ -818,24 +806,27 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
             findings['details'] = f"Found {len(issues_found)} issues with SageMaker MLOps features"
             
             for issue in issues_found:
-                findings['csv_data'].append({
-                    'Finding': f"SageMaker {issue['component']} Issue",
-                    'Finding Details': issue['issue'],
-                    'Resolution': get_resolution_for_component(issue['component']),
-                    'Reference': 'https://docs.aws.amazon.com/sagemaker/latest/dg/mlops.html',
-                    'Severity': issue['severity'],
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name=f"SageMaker {issue['component']} Issue",
+                        finding_details=issue['issue'],
+                        resolution=get_resolution_for_component(issue['component']),
+                        reference='https://docs.aws.amazon.com/sagemaker/latest/dg/mlops.html',
+                        severity=issue['severity'],
+                        status='Failed'
+                    )
+                )
         else:
             findings['details'] = "All SageMaker MLOps features are properly utilized"
-            findings['csv_data'].append({
-                'Finding': 'SageMaker MLOps Features Check',
-                'Finding Details': 'Model Registry, Feature Store, and Pipelines are properly configured and utilized',
-                'Resolution': '',
-                'Reference': 'https://docs.aws.amazon.com/sagemaker/latest/dg/mlops.html',
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name='SageMaker MLOps Features Check',
+                    finding_details='All SageMaker MLOps features are properly utilized',
+                    resolution='',
+                    reference='https://docs.aws.amazon.com/sagemaker/latest/dg/mlops.html',
+                    severity='N/A',
+                    status='Passed'
+                ))
 
         return findings
 
@@ -875,9 +866,6 @@ def check_sagemaker_clarify_usage(permission_cache) -> Dict[str, Any]:
     logger.debug("Starting check for SageMaker Clarify usage")
     try:
         findings = {
-            'check_name': 'SageMaker Clarify Usage Check',
-            'status': 'PASS',
-            'details': '',
             'csv_data': []
         }
 
@@ -923,28 +911,30 @@ def check_sagemaker_clarify_usage(permission_cache) -> Dict[str, Any]:
             })
 
         if issues_found:
-            findings['status'] = 'WARN'
-            findings['details'] = f"Found {len(issues_found)} issues with SageMaker Clarify usage"
             
             for issue in issues_found:
-                findings['csv_data'].append({
-                    'Finding': f"SageMaker Clarify {issue['issue_type']}",
-                    'Finding Details': issue['details'],
-                    'Resolution': "Implement SageMaker Clarify for model explainability and bias detection",
-                    'Reference': 'https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-configure-processing-jobs.html',
-                    'Severity': issue['severity'],
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name=f"SageMaker Clarify {issue['issue_type']}",
+                        finding_details=issue['details'],
+                        resolution="Implement SageMaker Clarify for model explainability and bias detection",
+                        reference='https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-configure-processing-jobs.html',
+                        severity=issue['severity'],
+                        status='Failed'
+                    )
+                )
         else:
             findings['details'] = "SageMaker Clarify is properly utilized"
-            findings['csv_data'].append({
-                'Finding': 'SageMaker Clarify Usage',
-                'Finding Details': 'Clarify is being used for model explainability and bias detection',
-                'Resolution': '',
-                'Reference': 'https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-configure-processing-jobs.html',
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name='SageMaker Clarify Usage Check',
+                    finding_details='SageMaker Clarify is properly utilized',
+                    resolution='',
+                    reference='https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-configure-processing-jobs.html',
+                    severity='N/A',
+                    status='Passed'
+                )
+            )
 
         return findings
 
@@ -964,9 +954,6 @@ def check_sagemaker_model_monitor_usage(permission_cache) -> Dict[str, Any]:
     logger.debug("Starting check for SageMaker Model Monitor usage")
     try:
         findings = {
-            'check_name': 'SageMaker Model Monitor Usage Check',
-            'status': 'PASS',
-            'details': '',
             'csv_data': []
         }
 
@@ -1010,28 +997,29 @@ def check_sagemaker_model_monitor_usage(permission_cache) -> Dict[str, Any]:
             })
 
         if issues_found:
-            findings['status'] = 'WARN'
-            findings['details'] = f"Found {len(issues_found)} issues with Model Monitor usage"
             
             for issue in issues_found:
-                findings['csv_data'].append({
-                    'Finding': f"Model Monitor {issue['issue_type']}",
-                    'Finding Details': issue['details'],
-                    'Resolution': "Configure comprehensive model monitoring schedules",
-                    'Reference': 'https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor.html',
-                    'Severity': issue['severity'],
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name=f"SageMaker Model Monitor {issue['issue_type']}",
+                        finding_details=issue['details'],
+                        resolution="Configure comprehensive model monitoring schedules",
+                        reference='https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor.html',
+                        severity=issue['severity'],
+                        status='Failed'
+                    )
+                )
         else:
-            findings['details'] = "SageMaker Model Monitor is properly configured"
-            findings['csv_data'].append({
-                'Finding': 'Model Monitor Usage',
-                'Finding Details': 'Model monitoring is actively tracking model performance',
-                'Resolution': '',
-                'Reference': 'https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor.html',
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name='SageMaker Model Monitor Usage Check',
+                    finding_details='SageMaker Model Monitor is actively tracking model performance',
+                    resolution='',
+                    reference='https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor.html',
+                    severity='N/A',
+                    status='Passed'
+                )
+            )
 
         return findings
 
@@ -1051,9 +1039,6 @@ def check_model_registry_usage(permission_cache) -> Dict[str, Any]:
     logger.debug("Starting check for Model Registry usage")
     try:
         findings = {
-            'check_name': 'Model Registry Usage Check',
-            'status': 'PASS',
-            'details': '',
             'csv_data': []
         }
 
@@ -1117,28 +1102,29 @@ def check_model_registry_usage(permission_cache) -> Dict[str, Any]:
             })
 
         if issues_found:
-            findings['status'] = 'WARN'
-            findings['details'] = f"Found {len(issues_found)} issues with Model Registry usage"
             
             for issue in issues_found:
-                findings['csv_data'].append({
-                    'Finding': f"Model Registry {issue['issue_type']}",
-                    'Finding Details': issue['details'],
-                    'Resolution': "Implement proper model versioning and approval workflows",
-                    'Reference': 'https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html',
-                    'Severity': issue['severity'],
-                    'Status': 'Failed'
-                })
+                findings['csv_data'].append(
+                    create_finding(
+                        finding_name=f"Model Registry {issue['issue_type']}",
+                        finding_details=issue['details'],
+                        resolution="Implement proper model versioning and approval workflows",
+                        reference='https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html',
+                        severity=issue['severity'],
+                        status='Failed'
+                    )
+                )
         else:
-            findings['details'] = "Model Registry is being used effectively"
-            findings['csv_data'].append({
-                'Finding': 'Model Registry Usage',
-                'Finding Details': 'Models are properly versioned and managed in the registry',
-                'Resolution': '',
-                'Reference': 'https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html',
-                'Severity': 'N/A',
-                'Status': 'Passed'
-            })
+            findings['csv_data'].append(
+                create_finding(
+                    finding_name='Model Registry Usage Check',
+                    finding_details='Model Registry is being used effectively',
+                    resolution='',
+                    reference='https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html',
+                    severity='N/A',
+                    status='Passed'
+                )
+            )
 
         return findings
 
@@ -1214,7 +1200,7 @@ def generate_csv_report(findings: List[Dict[str, Any]]) -> str:
     """
     logger.debug("Generating CSV report")
     csv_buffer = StringIO()
-    fieldnames = ['Finding', 'Finding Details', 'Resolution', 'Reference', 'Severity', 'Status']
+    fieldnames = ['Finding', 'Finding_Details', 'Resolution', 'Reference', 'Severity', 'Status']
     writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
     
     writer.writeheader()
@@ -1263,7 +1249,7 @@ def lambda_handler(event, context):
         permission_cache = get_permissions_cache(execution_id)
                 
         logger.info("Running SageMaker internet access check")
-        sagemaker_internet_access_findings = check_sagemaker_internet_access(permission_cache)
+        sagemaker_internet_access_findings = check_sagemaker_internet_access()
         all_findings.append(sagemaker_internet_access_findings)
 
         logger.info("Running SageMaker IAM permissions check")
@@ -1271,7 +1257,7 @@ def lambda_handler(event, context):
         all_findings.append(sagemaker_iam_findings)
 
         logger.info("Running SageMaker data protection check")
-        sagemaker_data_protection_findings = check_sagemaker_data_protection(permission_cache)
+        sagemaker_data_protection_findings = check_sagemaker_data_protection()
         all_findings.append(sagemaker_data_protection_findings)
 
         logger.info("Running GuardDuty SageMaker monitoring check")
