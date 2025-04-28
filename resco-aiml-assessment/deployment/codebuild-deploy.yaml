@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template to create CodeBuild project for SAM deployment'
+
+Parameters:
+  GitHubRepoUrl:
+    Type: String
+    Description: GitHub repository URL (e.g., https://github.com/username/repository)
+    Default: https://github.com/aws-samples/sample-resco-assessments
+  
+  ProjectName:
+    Type: String
+    Description: Name of the CodeBuild project
+    Default: ReSCO AI/ML Assessment
+
+Resources:
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSCloudFormationFullAccess
+      Policies:
+        - PolicyName: CodeBuildServiceRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Resource: '*'
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+              - Effect: Allow
+                Resource: '*'
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                  - s3:ListBucket
+              - Effect: Allow
+                Resource: '*'
+                Action:
+                  - lambda:*
+                  - apigateway:*
+                  - iam:*
+                  - cloudformation:*
+                  - sam:*
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Ref ProjectName
+      Description: 'CodeBuild project to deploy SAM applications'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+      Source:
+        Type: GITHUB
+        Location: !Ref GitHubRepoUrl
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                python: 3.9
+              commands:
+                - pip install --upgrade pip
+                - pip install --upgrade aws-sam-cli
+            
+            pre_build:
+              commands:
+                - echo "Starting the build process"
+                - sam --version
+                
+            build:
+              commands:
+                - sam build --use-container
+                
+            post_build:
+              commands:
+                - sam deploy --stack-name ${PROJECT_NAME}-stack --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
+          
+      Cache:
+        Type: NO_CACHE
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/${ProjectName}'
+          StreamName: build-logs
+      TimeoutInMinutes: 30
+      QueuedTimeoutInMinutes: 480
+      BadgeEnabled: true
+      Tags:
+        - Key: Purpose
+          Value: SAMDeployment
+
+Outputs:
+  CodeBuildProjectName:
+    Description: Name of the CodeBuild project
+    Value: !Ref CodeBuildProject
+  
+  CodeBuildProjectARN:
+    Description: ARN of the CodeBuild project
+    Value: !GetAtt CodeBuildProject.Arn
+  
+  ServiceRoleARN:
+    Description: ARN of the Service Role
+    Value: !GetAtt CodeBuildServiceRole.Arn
