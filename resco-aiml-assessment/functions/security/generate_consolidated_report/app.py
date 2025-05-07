@@ -213,11 +213,18 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
                 color: #28a745;
                 font-weight: bold;
             }}
+            .severity-na {{
+                color: ##ffffff;
+                font-weight: bold;
+            }}
             .status-failed {{
                 color: #dc3545;
             }}
             .status-passed {{
                 color: #28a745;
+            }}
+            .status-na {{
+                color: #ffffff;
             }}
             .timestamp {{
                 color: #666;
@@ -306,7 +313,8 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
                                 if (type === 'display') {{
                                     const severityClass = data.toLowerCase() === 'high' ? 'severity-high' :
                                                         data.toLowerCase() === 'medium' ? 'severity-medium' :
-                                                        'severity-low';
+                                                        data.toLowerCase() === 'low' ? 'severity-low' :
+                                                        'severity-na';
                                     return `<span class="${{severityClass}}">${{data}}</span>`;
                                 }}
                                 return data;
@@ -316,7 +324,9 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
                             targets: 5, // Status column
                             render: function(data, type, row) {{
                                 if (type === 'display') {{
-                                    const statusClass = data.toLowerCase() === 'failed' ? 'status-failed' : 'status-passed';
+                                const statusClass = data.toLowerCase() === 'failed' ? 'status-failed' :
+                                                        data.toLowerCase() === 'passed' ? 'status-passed' :
+                                                        'status-na';
                                     return `<span class="${{statusClass}}">${{data}}</span>`;
                                 }}
                                 return data;
