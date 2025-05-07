@@ -12,6 +12,7 @@ class SeverityEnum(str, Enum):
 class StatusEnum(str, Enum):
     FAILED = "Failed"
     PASSED = "Passed"
+    NA = "N/A"
 
 class Finding(BaseModel):
     """Represents a security finding with required fields and validations"""

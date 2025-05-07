@@ -247,8 +247,8 @@ def check_guardduty_enabled() -> Dict[str, Any]:
                             finding_details='SageMaker protection is not enabled in Amazon GuardDuty. This feature helps detect threats in SageMaker runtime operations.',
                             resolution='Enable SageMaker protection in GuardDuty to monitor for potential security threats in your SageMaker environment.',
                             reference='https://docs.aws.amazon.com/guardduty/latest/ug/runtime-monitoring.html',
-                            severity='Medium',
-                            status='Failed'
+                            severity='N/A',
+                            status='N/A'
                         ))
             except ClientError as e:
                 logger.warning(f"Could not check GuardDuty features: {str(e)}")
@@ -700,7 +700,8 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                     'component': 'Model Registry',
                     'issue': 'No model package groups found',
                     'impact': 'Model versioning and governance may not be properly tracked',
-                    'severity': 'Medium'
+                    'severity': 'Medium',
+                    'status': "Failed"
                 })
             else:
                 # Check if models are being versioned
@@ -715,7 +716,8 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                                 'component': 'Model Registry',
                                 'issue': f"Model group '{group_name}' has minimal versioning",
                                 'impact': 'Limited model version tracking detected',
-                                'severity': 'Low'
+                                'severity': 'Low',
+                                'status': "Failed"
                             })
         except Exception as e:
             logger.error(f"Error checking Model Registry: {str(e)}")
@@ -723,7 +725,8 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                 'component': 'Model Registry',
                 'issue': f"Error checking configuration: {str(e)}",
                 'impact': 'Unable to verify model versioning',
-                'severity': 'High'
+                'severity': 'High',
+                "status": "Failed"
             })
 
         # Check Feature Store Usage
@@ -738,7 +741,8 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                     'component': 'Feature Store',
                     'issue': 'No feature groups found',
                     'impact': 'Feature reuse and sharing may be limited',
-                    'severity': 'Medium'
+                    'severity': 'N/A',
+                    'status': 'N/A'
                 })
             else:
                 # Check feature group status and configuration
@@ -748,7 +752,8 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                             'component': 'Feature Store',
                             'issue': f"Feature group '{group.get('FeatureGroupName')}' is not in Created state",
                             'impact': 'Feature group may not be properly configured',
-                            'severity': 'Medium'
+                            'severity': 'Medium',
+                            'status': 'Failed'
                         })
         except Exception as e:
             logger.error(f"Error checking Feature Store: {str(e)}")
@@ -756,7 +761,8 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                 'component': 'Feature Store',
                 'issue': f"Error checking configuration: {str(e)}",
                 'impact': 'Unable to verify feature management',
-                'severity': 'High'
+                'severity': 'High',
+                'status': 'Failed'
             })
 
         # Check Pipeline Usage
@@ -771,7 +777,8 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                     'component': 'Pipelines',
                     'issue': 'No ML pipelines found',
                     'impact': 'Automated ML workflows may not be implemented',
-                    'severity': 'Medium'
+                    'severity': 'N/A',
+                    'status': 'N/A'
                 })
             else:
                 # Check pipeline status and execution history
@@ -787,7 +794,8 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                                 'component': 'Pipelines',
                                 'issue': f"Pipeline '{pipeline_name}' has no execution history",
                                 'impact': 'Pipeline may be defined but not actively used',
-                                'severity': 'Low'
+                                'severity': 'Low',
+                                'status': 'Failed'
                             })
         except Exception as e:
             logger.error(f"Error checking Pipelines: {str(e)}")
@@ -795,7 +803,8 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                 'component': 'Pipelines',
                 'issue': f"Error checking configuration: {str(e)}",
                 'impact': 'Unable to verify pipeline automation',
-                'severity': 'High'
+                'severity': 'High',
+                'status': 'Failed'
             })
 
         # Generate findings based on issues found
@@ -811,7 +820,7 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                         resolution=get_resolution_for_component(issue['component']),
                         reference='https://docs.aws.amazon.com/sagemaker/latest/dg/mlops.html',
                         severity=issue['severity'],
-                        status='Failed'
+                        status=issue['status']
                     )
                 )
         else:
@@ -890,14 +899,16 @@ def check_sagemaker_clarify_usage(permission_cache) -> Dict[str, Any]:
                             issues_found.append({
                                 'issue_type': 'Failed Clarify Job',
                                 'details': f"Clarify job {job_name} failed",
-                                'severity': 'High'
+                                'severity': 'High',
+                                'status': 'Failed'
                             })
 
             if not clarify_jobs_found:
                 issues_found.append({
                     'issue_type': 'No Clarify Usage',
                     'details': 'No SageMaker Clarify jobs found',
-                    'severity': 'Medium'
+                    'severity': 'N/A',
+                    'status': 'N/A'
                 })
 
         except Exception as e:
@@ -905,7 +916,8 @@ def check_sagemaker_clarify_usage(permission_cache) -> Dict[str, Any]:
             issues_found.append({
                 'issue_type': 'Clarify Check Error',
                 'details': f"Error checking Clarify configuration: {str(e)}",
-                'severity': 'High'
+                'severity': 'High',
+                'status': 'Failed'
             })
 
         if issues_found:
@@ -918,7 +930,7 @@ def check_sagemaker_clarify_usage(permission_cache) -> Dict[str, Any]:
                         resolution="Implement SageMaker Clarify for model explainability and bias detection",
                         reference='https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-configure-processing-jobs.html',
                         severity=issue['severity'],
-                        status='Failed'
+                        status=issue['status']
                     )
                 )
         else:
@@ -976,14 +988,16 @@ def check_sagemaker_model_monitor_usage(permission_cache) -> Dict[str, Any]:
                         issues_found.append({
                             'issue_type': 'Inactive Monitor',
                             'details': f"Monitoring schedule {schedule_name} is not active",
-                            'severity': 'Medium'
+                            'severity': 'Medium',
+                            'status': 'Failed'
                         })
 
             if not monitoring_found:
                 issues_found.append({
                     'issue_type': 'No Model Monitoring',
                     'details': 'No Model Monitor schedules found',
-                    'severity': 'High'
+                    'severity': 'N/A',
+                    'status': 'N/A'
                 })
 
         except Exception as e:
@@ -991,7 +1005,8 @@ def check_sagemaker_model_monitor_usage(permission_cache) -> Dict[str, Any]:
             issues_found.append({
                 'issue_type': 'Monitor Check Error',
                 'details': f"Error checking Model Monitor configuration: {str(e)}",
-                'severity': 'High'
+                'severity': 'High',
+                'status': 'Failed'
             })
 
         if issues_found:
@@ -1004,7 +1019,7 @@ def check_sagemaker_model_monitor_usage(permission_cache) -> Dict[str, Any]:
                         resolution="Configure comprehensive model monitoring schedules",
                         reference='https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor.html',
                         severity=issue['severity'],
-                        status='Failed'
+                        status=issue['status']
                     )
                 )
         else:
@@ -1063,7 +1078,8 @@ def check_model_registry_usage(permission_cache) -> Dict[str, Any]:
                             issues_found.append({
                                 'issue_type': 'Empty Model Group',
                                 'details': f"Model group {group_name} has no registered models",
-                                'severity': 'Low'
+                                'severity': 'Low',
+                                'status': 'Failed'
                             })
                         else:
                             # Check model approval status
@@ -1073,7 +1089,8 @@ def check_model_registry_usage(permission_cache) -> Dict[str, Any]:
                                 issues_found.append({
                                     'issue_type': 'No Approved Models',
                                     'details': f"Model group {group_name} has no approved models",
-                                    'severity': 'Medium'
+                                    'severity': 'N/A',
+                                    'status': 'N/A'
                                 })
                     
                     except Exception as e:
@@ -1081,14 +1098,16 @@ def check_model_registry_usage(permission_cache) -> Dict[str, Any]:
                         issues_found.append({
                             'issue_type': 'Model Check Error',
                             'details': f"Error checking models in group {group_name}",
-                            'severity': 'Medium'
+                            'severity': 'Medium',
+                            'status': 'Failed'
                         })
 
             if not registry_used:
                 issues_found.append({
                     'issue_type': 'Registry Not Used',
                     'details': 'Model Registry is not being utilized',
-                    'severity': 'High'
+                    'severity': 'N/A',
+                    'status': 'N/A'
                 })
 
         except Exception as e:
@@ -1096,7 +1115,8 @@ def check_model_registry_usage(permission_cache) -> Dict[str, Any]:
             issues_found.append({
                 'issue_type': 'Registry Check Error',
                 'details': f"Error checking Model Registry configuration: {str(e)}",
-                'severity': 'High'
+                'severity': 'High',
+                'status': 'Failed'
             })
 
         if issues_found:
@@ -1109,7 +1129,7 @@ def check_model_registry_usage(permission_cache) -> Dict[str, Any]:
                         resolution="Implement proper model versioning and approval workflows",
                         reference='https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html',
                         severity=issue['severity'],
-                        status='Failed'
+                        status=issue['status']
                     )
                 )
         else:
