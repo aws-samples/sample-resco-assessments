@@ -59,9 +59,9 @@
                     }
                 },
                 {
-                    "StartAt": "Sagemaker Sagemaker Assessment",
+                    "StartAt": "Sagemaker Security Assessment",
                     "States": {
-                        "Sagemaker Sagemaker Assessment": {
+                        "Sagemaker Security Assessment": {
                             "Type": "Task",
                             "Resource": "arn:aws:states:::lambda:invoke",
                             "Retry": [

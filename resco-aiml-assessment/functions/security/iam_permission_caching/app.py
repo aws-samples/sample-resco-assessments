@@ -12,6 +12,12 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 import random
 
+from datetime import datetime
+
+def get_current_utc_date():
+    return datetime.utcnow().strftime("%Y/%m/%d")
+
+
 # Configure boto3 with retries
 boto3_config = Config(
     retries = dict(
@@ -47,7 +53,8 @@ def write_permissions_to_s3(permission_cache, execution_id):
         json_data = json.dumps(cache_data, default=str, indent=2)
         
         # Define the S3 key (filename)
-        s3_key = f'{execution_id}/permissions_cache.json'
+        date_string = get_current_utc_date()
+        s3_key = f'{date_string}/{execution_id}/permissions_cache.json'
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
 
         # Upload to S3

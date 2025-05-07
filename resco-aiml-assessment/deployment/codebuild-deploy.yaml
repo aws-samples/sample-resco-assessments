@@ -10,7 +10,7 @@ Parameters:
   ProjectName:
     Type: String
     Description: Name of the CodeBuild project
-    Default: ReSCO AI/ML Assessment
+    Default: ReSCO-AIML-SecurityAssessment
 
 Resources:
   CodeBuildServiceRole:
@@ -51,6 +51,8 @@ Resources:
                   - iam:*
                   - cloudformation:*
                   - sam:*
+                  - s3:*
+                  - states:*
               - Effect: Allow
                 Resource: '*'
                 Action:
@@ -93,16 +95,17 @@ Resources:
                 
             build:
               commands:
+                - cd resco-aiml-assessment
                 - sam build --use-container
                 
             post_build:
               commands:
-                - sam deploy --stack-name ${PROJECT_NAME}-stack --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
+                - sam deploy --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
                 # Get the state machine ARN from CloudFormation outputs
                 - echo "Getting State Machine ARN from CloudFormation outputs"
                 - >
                   STATE_MACHINE_ARN=$(aws cloudformation describe-stacks 
-                  --stack-name ${PROJECT_NAME}-stack 
+                  --stack-name resco-aiml-security
                   --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' 
                   --output text)
                 # Start execution of the state machine
@@ -111,7 +114,6 @@ Resources:
                   aws stepfunctions start-execution 
                   --state-machine-arn $STATE_MACHINE_ARN 
                   --input "{}"
-
       Cache:
         Type: NO_CACHE
       LogsConfig:

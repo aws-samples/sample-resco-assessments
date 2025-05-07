@@ -53,7 +53,8 @@ def get_assessment_results(execution_id: str) -> Dict[str, Any]:
         s3_client = boto3.client('s3', config=boto3_config)
         
         # Define the base path for this execution
-        base_path = f"{execution_id}"
+        date_string = get_current_utc_date()
+        base_path = f"{date_string}/{execution_id}"
         
         # List all CSV files in the execution directory
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
@@ -245,7 +246,7 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
     <body>
         <div class="container-fluid">
             <div class="header">
-                <h1>AIML Security Assessment Report</h1>
+                <h1>ReSCO AI/ML Security Assessment Report</h1>
                 <p class="timestamp">Generated: {timestamp}</p>
                 <p>Execution ID: {execution_id}</p>
             </div>
@@ -386,6 +387,10 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
     
     return html_content
 
+
+def get_current_utc_date():
+    return datetime.utcnow().strftime("%Y/%m/%d")
+
 def write_html_to_s3(html_content: str, s3_bucket: str, execution_id: str) -> Optional[str]:
     """
     Write HTML report to S3
@@ -402,7 +407,8 @@ def write_html_to_s3(html_content: str, s3_bucket: str, execution_id: str) -> Op
         s3_client = boto3.client('s3', config=boto3_config)
         
         # Generate the S3 key
-        s3_key = f'{execution_id}/security_assessment.html'
+        date_string = get_current_utc_date()
+        s3_key = f'{date_string}/{execution_id}/security_assessment.html'
         
         # Upload the HTML file
         s3_client.put_object(

@@ -244,8 +244,6 @@ Resources:
   AIMLAssessmentBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
-    VersioningConfiguration:
-        Status: Enabled
     Properties:
       BucketName: !Sub ${AWS::StackName}-aiml-assessment-bucket-${AWS::AccountId}
       VersioningConfiguration:

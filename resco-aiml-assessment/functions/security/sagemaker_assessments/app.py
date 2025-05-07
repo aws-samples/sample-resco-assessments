@@ -37,7 +37,8 @@ def get_permissions_cache(execution_id: str) -> Optional[Dict[str, Any]]:
     """
     try:
         s3_client = boto3.client('s3', config=boto3_config)
-        s3_key = f'{execution_id}/permissions_cache.json'
+        date_string = get_current_utc_date()
+        s3_key = f'{date_string}/{execution_id}/permissions_cache.json'
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
 
         logger.info(f"Retrieving permissions cache from s3://{s3_bucket}/{s3_key}")
@@ -1228,6 +1229,8 @@ def generate_csv_report(findings: List[Dict[str, Any]]) -> str:
                 writer.writerow(row)
     
     return csv_buffer.getvalue()
+def get_current_utc_date():
+    return datetime.utcnow().strftime("%Y/%m/%d")
 
 def write_to_s3(execution_id, csv_content: str, bucket_name: str) -> Dict[str, str]:
     """
@@ -1238,7 +1241,8 @@ def write_to_s3(execution_id, csv_content: str, bucket_name: str) -> Dict[str, s
         s3_client = boto3.client('s3', config=boto3_config)
         
         # Upload CSV file
-        csv_file_name = f'{execution_id}/sagemaker_security_report.csv'
+        date_string = get_current_utc_date()
+        csv_file_name = f'{date_string}/{execution_id}/sagemaker_security_report.csv'
         s3_client.put_object(
             Bucket=bucket_name,
             Key=csv_file_name,
