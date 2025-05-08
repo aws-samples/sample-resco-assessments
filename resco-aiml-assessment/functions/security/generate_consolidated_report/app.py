@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from io import StringIO
+import json
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
@@ -55,14 +56,14 @@ def get_assessment_results(execution_id: str) -> Dict[str, Any]:
         # Define the base path for this execution
         date_string = get_current_utc_date()
         base_path = f"{date_string}/{execution_id}"
-        
+        print(date_string)
         # List all CSV files in the execution directory
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
         response = s3_client.list_objects_v2(
             Bucket=s3_bucket,
             Prefix=base_path
         )
-        
+        print(response, base_path)
         if 'Contents' not in response:
             logger.warning(f"No assessment files found for execution {execution_id}")
             return {}
@@ -153,7 +154,7 @@ def generate_html_report(assessment_results):
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Security Assessment Report</title>
+        <title>ReSCO AI/ML Security Assessment Report</title>
         <style>
             body {{ 
                 font-family: Arial, sans-serif; 
@@ -214,7 +215,7 @@ def generate_html_report(assessment_results):
         </style>
     </head>
     <body>
-        <h1>Security Assessment Report</h1>
+        <h1>ReSCO AI/ML Security Assessment Report</h1>
         <div class="table-controls">
             <input type="text" id="searchInput" placeholder="Quick search across all columns...">
         </div>
@@ -294,25 +295,63 @@ def generate_html_report(assessment_results):
     </body>
     </html>
     """
-
+    try:
     # Generate table rows from assessment results
-    rows = []
-    for result in assessment_results:
-        print(result)
-        for finding in result.get('body', {}).get('findings', []):
-            for data in finding.get('csv_data', []):
-                severity_class = f"severity-{data['Severity'].lower()}" if 'Severity' in data else ""
-                row = f"""
-                <tr>
-                    <td>{data.get('Finding', '')}</td>
-                    <td>{data.get('Finding_Details', '')}</td>
-                    <td>{data.get('Resolution', '')}</td>
-                    <td><a href="{data.get('Reference', '')}" target="_blank">{data.get('Reference', '')}</a></td>
-                    <td class="{severity_class}">{data.get('Severity', '')}</td>
-                    <td>{data.get('Status', '')}</td>
-                </tr>
-                """
-                rows.append(row)
+        rows = []
+        
+        # Handle Bedrock findings
+        if 'bedrock' in assessment_results:
+            for report_type, findings in assessment_results['bedrock'].items():
+                for finding in findings:
+                    severity_class = f"severity-{finding.get('Severity', '').lower()}"
+                    row = f"""
+                    <tr>
+                        <td>{finding.get('Finding', '')}</td>
+                        <td>{finding.get('Finding_Details', '')}</td>
+                        <td>{finding.get('Resolution', '')}</td>
+                        <td><a href="{finding.get('Reference', '')}" target="_blank">{finding.get('Reference', '')}</a></td>
+                        <td class="{severity_class}">{finding.get('Severity', '')}</td>
+                        <td>{finding.get('Status', '')}</td>
+                    </tr>
+                    """
+                    rows.append(row)
+        if 'sagemaker' in assessment_results:
+            for report_type, findings in assessment_results['sagemaker'].items():
+                for finding in findings:
+                    severity_class = f"severity-{finding.get('Severity', '').lower()}"
+                    row = f"""
+                    <tr>
+                        <td>{finding.get('Finding', '')}</td>
+                        <td>{finding.get('Finding_Details', '')}</td>
+                        <td>{finding.get('Resolution', '')}</td>
+                        <td><a href="{finding.get('Reference', '')}" target="_blank">{finding.get('Reference', '')}</a></td>
+                        <td class="{severity_class}">{finding.get('Severity', '')}</td>
+                        <td>{finding.get('Status', '')}</td>
+                    </tr>
+                    """
+                    rows.append(row)
+
+        if not rows:
+            rows.append("""
+            <tr>
+                <td colspan="6" style="text-align: center;">No findings to display</td>
+            </tr>
+            """)
+        return html_template.format(rows='\n'.join(rows))
+
+    except Exception as e:
+        print(f"Error generating HTML report: {str(e)}")
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <body>
+            <h1>Error Generating Report</h1>
+            <p>An error occurred while generating the report: {str(e)}</p>
+        </body>
+        </html>
+        """
+
+
 
     # Replace {rows} placeholder with generated rows
     html_content = html_template.format(rows='\n'.join(rows))
@@ -371,7 +410,6 @@ def lambda_handler(event, context):
     try:
         # Get execution ID from event
         execution_id = event["Execution"]["Name"]
-        print(execution_id)
         # Get S3 bucket name from environment variable
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
         if not s3_bucket:
@@ -379,7 +417,7 @@ def lambda_handler(event, context):
         
         # Get assessment results
         assessment_results = get_assessment_results(execution_id)
-        
+        print(assessment_results)
         if not assessment_results:
             raise ValueError(f"No assessment results found: {execution_id}")
         

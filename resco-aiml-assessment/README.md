@@ -82,6 +82,10 @@ resco-aiml-assessment/
 └── statemachine/                 # Contains the state machine definition
 ```
 
+### Local Testing
+
+Making report file: sam local invoke GenerateConsolidatedReportFunction --env-vars envvars.json -e testfile.json | 2>&1
+
 ## Step Functions Workflow
 ![Step Functions Workflow](images/StepFunctionsFlow.png)
 
