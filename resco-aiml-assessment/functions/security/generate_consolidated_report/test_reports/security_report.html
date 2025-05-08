@@ -1,0 +1,194 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Security Assessment Report</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                margin: 20px; 
+            }
+            table { 
+                border-collapse: collapse; 
+                width: 100%; 
+                margin-top: 20px; 
+            }
+            th, td { 
+                border: 1px solid #ddd; 
+                padding: 8px; 
+                text-align: left; 
+            }
+            th { 
+                background-color: #f2f2f2;
+                white-space: nowrap;
+                padding-bottom: 8px !important;
+            }
+            th .header-content {
+                margin-bottom: 8px;
+                font-weight: bold;
+            }
+            tr:nth-child(even) { 
+                background-color: #f9f9f9; 
+            }
+            .table-controls { 
+                margin: 20px 0; 
+            }
+            .column-filter {
+                width: 95%;
+                padding: 4px;
+                margin-top: 8px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 0.9em;
+            }
+            #searchInput {
+                width: 300px;
+                padding: 8px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                margin-bottom: 10px;
+            }
+            .severity-high { 
+                color: #d73a4a; 
+                font-weight: bold; 
+            }
+            .severity-medium { 
+                color: #fb8c00; 
+                font-weight: bold; 
+            }
+            .severity-low { 
+                color: #2986cc; 
+                font-weight: bold; 
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Security Assessment Report</h1>
+        <div class="table-controls">
+            <input type="text" id="searchInput" placeholder="Quick search across all columns...">
+        </div>
+        <table id="assessmentTable">
+            <thead>
+                <tr>
+                    <th>
+                        <div class="header-content">Finding</div>
+                        <input type="text" class="column-filter" placeholder="Filter Findings...">
+                    </th>
+                    <th>
+                        <div class="header-content">Finding Details</div>
+                        <input type="text" class="column-filter" placeholder="Filter Details...">
+                    </th>
+                    <th>
+                        <div class="header-content">Resolution</div>
+                        <input type="text" class="column-filter" placeholder="Filter Resolutions...">
+                    </th>
+                    <th>
+                        <div class="header-content">Reference</div>
+                        <input type="text" class="column-filter" placeholder="Filter References...">
+                    </th>
+                    <th>
+                        <div class="header-content">Severity</div>
+                        <input type="text" class="column-filter" placeholder="Filter Severity...">
+                    </th>
+                    <th>
+                        <div class="header-content">Status</div>
+                        <input type="text" class="column-filter" placeholder="Filter Status...">
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td>Bedrock Model Access Control</td>
+                    <td>The Bedrock model access is not restricted to specific IAM principals. This could allow unauthorized access to model endpoints.</td>
+                    <td>Implement IAM policies to restrict access to specific principals and use resource-based policies for model invocations.</td>
+                    <td><a href="https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples.html" target="_blank">https://docs.aws.amazon.com/bedrock/latest/userguide/security_iam_id-based-policy-examples.html</a></td>
+                    <td class="severity-high">High</td>
+                    <td>Open</td>
+                </tr>
+                
+
+                <tr>
+                    <td>Bedrock API Logging</td>
+                    <td>CloudTrail logging is not enabled for Bedrock API calls. This limits audit capabilities and incident investigation.</td>
+                    <td>Enable CloudTrail logging for Bedrock API actions and configure log retention policies.</td>
+                    <td><a href="https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html" target="_blank">https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html</a></td>
+                    <td class="severity-medium">Medium</td>
+                    <td>Open</td>
+                </tr>
+                
+
+                <tr>
+                    <td>SageMaker Endpoint Encryption</td>
+                    <td>SageMaker endpoint is not using encryption at rest. Sensitive data could be exposed if storage is compromised.</td>
+                    <td>Enable AWS KMS encryption for SageMaker endpoints using customer managed keys.</td>
+                    <td><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-at-rest.html" target="_blank">https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-at-rest.html</a></td>
+                    <td class="severity-high">High</td>
+                    <td>Open</td>
+                </tr>
+                
+
+                <tr>
+                    <td>SageMaker Network Isolation</td>
+                    <td>SageMaker training jobs are not configured with network isolation. This could expose the training environment to external networks.</td>
+                    <td>Enable network isolation for SageMaker training jobs and use VPC configurations.</td>
+                    <td><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/mkt-algo-model-internet-free.html" target="_blank">https://docs.aws.amazon.com/sagemaker/latest/dg/mkt-algo-model-internet-free.html</a></td>
+                    <td class="severity-medium">Medium</td>
+                    <td>In Progress</td>
+                </tr>
+                
+
+                <tr>
+                    <td>SageMaker IAM Role Permissions</td>
+                    <td>SageMaker execution role has overly permissive IAM policies. This violates the principle of least privilege.</td>
+                    <td>Review and restrict IAM role permissions to only necessary actions and resources.</td>
+                    <td><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/security_iam_id-based-policy-examples.html" target="_blank">https://docs.aws.amazon.com/sagemaker/latest/dg/security_iam_id-based-policy-examples.html</a></td>
+                    <td class="severity-high">High</td>
+                    <td>Open</td>
+                </tr>
+                
+            </tbody>
+        </table>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const table = document.querySelector('table');
+            const searchInput = document.getElementById('searchInput');
+            const filters = document.querySelectorAll('.column-filter');
+            
+            // Global search
+            searchInput.addEventListener('input', function() {
+                const searchText = this.value.toLowerCase();
+                const rows = table.querySelectorAll('tbody tr');
+                
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(searchText) ? '' : 'none';
+                });
+            });
+
+            // Column filters
+            filters.forEach((filter, index) => {
+                filter.addEventListener('input', () => {
+                    const filterValues = Array.from(filters).map(f => f.value.toLowerCase());
+                    const rows = table.querySelectorAll('tbody tr');
+                    
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('td');
+                        let shouldShow = true;
+                        
+                        filterValues.forEach((value, i) => {
+                            if (value && !cells[i].textContent.toLowerCase().includes(value)) {
+                                shouldShow = false;
+                            }
+                        });
+                        
+                        row.style.display = shouldShow ? '' : 'none';
+                    });
+                });
+            });
+        });
+        </script>
+    </body>
+    </html>
+    

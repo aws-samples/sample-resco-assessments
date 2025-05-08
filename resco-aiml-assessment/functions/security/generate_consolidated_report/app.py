@@ -153,50 +153,98 @@ def generate_html_report(assessment_results):
     <!DOCTYPE html>
     <html>
     <head>
-        <title>ReSCO AI/ML Security Assessment Report</title>
+        <title>Security Assessment Report</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-            th { background-color: #f2f2f2; position: relative; padding-bottom: 30px !important; }
-            tr:nth-child(even) { background-color: #f9f9f9; }
-            .table-controls { margin: 20px 0; }
-            .column-filter {
+            body {{ 
+                font-family: Arial, sans-serif; 
+                margin: 20px; 
+            }}
+            table {{ 
+                border-collapse: collapse; 
+                width: 100%; 
+                margin-top: 20px; 
+            }}
+            th, td {{ 
+                border: 1px solid #ddd; 
+                padding: 8px; 
+                text-align: left; 
+            }}
+            th {{ 
+                background-color: #f2f2f2;
+                white-space: nowrap;
+                padding-bottom: 8px !important;
+            }}
+            th .header-content {{
+                margin-bottom: 8px;
+                font-weight: bold;
+            }}
+            tr:nth-child(even) {{ 
+                background-color: #f9f9f9; 
+            }}
+            .table-controls {{ 
+                margin: 20px 0; 
+            }}
+            .column-filter {{
                 width: 95%;
-                padding: 5px;
-                margin-bottom: 5px;
+                padding: 4px;
+                margin-top: 8px;
                 border: 1px solid #ddd;
                 border-radius: 4px;
-                position: absolute;
-                bottom: 5px;
-                left: 0;
-            }
-            #searchInput {
+                font-size: 0.9em;
+            }}
+            #searchInput {{
                 width: 300px;
                 padding: 8px;
                 border: 1px solid #ddd;
                 border-radius: 4px;
                 margin-bottom: 10px;
-            }
-            .severity-high { color: #d73a4a; font-weight: bold; }
-            .severity-medium { color: #fb8c00; font-weight: bold; }
-            .severity-low { color: #2986cc; font-weight: bold; }
+            }}
+            .severity-high {{ 
+                color: #d73a4a; 
+                font-weight: bold; 
+            }}
+            .severity-medium {{ 
+                color: #fb8c00; 
+                font-weight: bold; 
+            }}
+            .severity-low {{ 
+                color: #2986cc; 
+                font-weight: bold; 
+            }}
         </style>
     </head>
     <body>
-        <h1>ReSCO AI/ML Security Assessment Report</h1>
+        <h1>Security Assessment Report</h1>
         <div class="table-controls">
             <input type="text" id="searchInput" placeholder="Quick search across all columns...">
         </div>
         <table id="assessmentTable">
             <thead>
                 <tr>
-                    <th>Finding</th>
-                    <th>Finding Details</th>
-                    <th>Resolution</th>
-                    <th>Reference</th>
-                    <th>Severity</th>
-                    <th>Status</th>
+                    <th>
+                        <div class="header-content">Finding</div>
+                        <input type="text" class="column-filter" placeholder="Filter Findings...">
+                    </th>
+                    <th>
+                        <div class="header-content">Finding Details</div>
+                        <input type="text" class="column-filter" placeholder="Filter Details...">
+                    </th>
+                    <th>
+                        <div class="header-content">Resolution</div>
+                        <input type="text" class="column-filter" placeholder="Filter Resolutions...">
+                    </th>
+                    <th>
+                        <div class="header-content">Reference</div>
+                        <input type="text" class="column-filter" placeholder="Filter References...">
+                    </th>
+                    <th>
+                        <div class="header-content">Severity</div>
+                        <input type="text" class="column-filter" placeholder="Filter Severity...">
+                    </th>
+                    <th>
+                        <div class="header-content">Status</div>
+                        <input type="text" class="column-filter" placeholder="Filter Status...">
+                    </th>
                 </tr>
             </thead>
             <tbody>
@@ -205,50 +253,43 @@ def generate_html_report(assessment_results):
         </table>
 
         <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function() {{
             const table = document.querySelector('table');
-            const headers = table.querySelectorAll('th');
+            const searchInput = document.getElementById('searchInput');
+            const filters = document.querySelectorAll('.column-filter');
             
-            // Add filter input to each column header
-            headers.forEach((header, index) => {
-                const input = document.createElement('input');
-                input.className = 'column-filter';
-                input.placeholder = `Filter ${header.textContent}...`;
-                input.addEventListener('input', () => filterColumn(index));
-                header.appendChild(input);
-            });
-
-            // Global search functionality
-            document.getElementById('searchInput').addEventListener('input', function() {
+            // Global search
+            searchInput.addEventListener('input', function() {{
                 const searchText = this.value.toLowerCase();
                 const rows = table.querySelectorAll('tbody tr');
                 
-                rows.forEach(row => {
+                rows.forEach(row => {{
                     const text = row.textContent.toLowerCase();
                     row.style.display = text.includes(searchText) ? '' : 'none';
-                });
-            });
+                }});
+            }});
 
-            function filterColumn(column) {
-                const filters = Array.from(document.querySelectorAll('.column-filter'))
-                    .map(input => input.value.toLowerCase());
-                
-                const rows = table.querySelectorAll('tbody tr');
-                
-                rows.forEach(row => {
-                    const cells = row.querySelectorAll('td');
-                    let shouldShow = true;
+            // Column filters
+            filters.forEach((filter, index) => {{
+                filter.addEventListener('input', () => {{
+                    const filterValues = Array.from(filters).map(f => f.value.toLowerCase());
+                    const rows = table.querySelectorAll('tbody tr');
                     
-                    filters.forEach((filter, index) => {
-                        if (filter && !cells[index].textContent.toLowerCase().includes(filter)) {
-                            shouldShow = false;
-                        }
-                    });
-                    
-                    row.style.display = shouldShow ? '' : 'none';
-                });
-            }
-        });
+                    rows.forEach(row => {{
+                        const cells = row.querySelectorAll('td');
+                        let shouldShow = true;
+                        
+                        filterValues.forEach((value, i) => {{
+                            if (value && !cells[i].textContent.toLowerCase().includes(value)) {{
+                                shouldShow = false;
+                            }}
+                        }});
+                        
+                        row.style.display = shouldShow ? '' : 'none';
+                    }});
+                }});
+            }});
+        }});
         </script>
     </body>
     </html>
@@ -257,6 +298,7 @@ def generate_html_report(assessment_results):
     # Generate table rows from assessment results
     rows = []
     for result in assessment_results:
+        print(result)
         for finding in result.get('body', {}).get('findings', []):
             for data in finding.get('csv_data', []):
                 severity_class = f"severity-{data['Severity'].lower()}" if 'Severity' in data else ""
