@@ -3,6 +3,8 @@
 ## Overview
 ReSCO AI/ML Assessment Framework is a serverless solution designed to perform comprehensive Resilience, Security, and Cost Optimization (ReSCO) assessments for AI/ML workloads on AWS. The initial release focuses on security assessments for Amazon Bedrock and Amazon SageMaker workloads.
 
+This assessment is still in internal Beta testing and should not be used to assess production workloads.
+
 ## Architecture
 ![Architecture Diagram](images/AI_MLReSCOAssessment.jpeg)
 
