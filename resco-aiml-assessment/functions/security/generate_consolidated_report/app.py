@@ -56,14 +56,12 @@ def get_assessment_results(execution_id: str) -> Dict[str, Any]:
         # Define the base path for this execution
         date_string = get_current_utc_date()
         base_path = f"{date_string}/{execution_id}"
-        print(date_string)
         # List all CSV files in the execution directory
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
         response = s3_client.list_objects_v2(
             Bucket=s3_bucket,
             Prefix=base_path
         )
-        print(response, base_path)
         if 'Contents' not in response:
             logger.warning(f"No assessment files found for execution {execution_id}")
             return {}
@@ -417,7 +415,6 @@ def lambda_handler(event, context):
         
         # Get assessment results
         assessment_results = get_assessment_results(execution_id)
-        print(assessment_results)
         if not assessment_results:
             raise ValueError(f"No assessment results found: {execution_id}")
         
