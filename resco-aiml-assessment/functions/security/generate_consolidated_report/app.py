@@ -145,197 +145,110 @@ def get_assessment_results(execution_id: str) -> Dict[str, Any]:
         raise
 
 
-def generate_html_report(assessment_results: Dict[str, Any]) -> str:
+def generate_html_report(assessment_results):
     """
-    Generate HTML report from assessment results with sortable, filterable table and pagination
-    
-    Args:
-        assessment_results (Dict[str, Any]): Assessment results from get_assessment_results
-    
-    Returns:
-        str: HTML content as string
+    Generate HTML report from assessment results
     """
-
-    # Calculate metrics
-    severity_counts = {'High': 0, 'Medium': 0, 'Low': 0, 'Informational': 0}
-    finding_counts = {}
-    
-    # Process Bedrock findings
-    for findings in assessment_results.get('bedrock', {}).values():
-        for finding in findings:
-            severity = finding.get('Severity', 'Low')
-            finding_name = finding.get('Finding', 'Unknown')
-            
-            severity_counts[severity] = severity_counts.get(severity, 0) + 1
-            finding_counts[finding_name] = finding_counts.get(finding_name, 0) + 1
-    
-    # Process SageMaker findings
-    for findings in assessment_results.get('sagemaker', {}).values():
-        for finding in findings:
-            severity = finding.get('Severity', 'Low')
-            finding_name = finding.get('Finding', 'Unknown')
-            
-            severity_counts[severity] = severity_counts.get(severity, 0) + 1
-            finding_counts[finding_name] = finding_counts.get(finding_name, 0) + 1
-
-    html_template = r"""
+    html_template = """
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>AIML Security Assessment Report</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+        <title>ReSCO AI/ML Security Assessment Report</title>
         <style>
-            body {{
-                font-family: Arial, sans-serif;
-                margin: 20px;
-                color: #333;
-            }}
-            .header {{
-                margin-bottom: 20px;
-            }}
-            .summary {{
-                margin-bottom: 30px;
-                padding: 15px;
-                background-color: #f8f9fa;
-                border-radius: 5px;
-            }}
-            .severity-high {{
-                color: #dc3545;
-                font-weight: bold;
-            }}
-            .severity-medium {{
-                color: #ffc107;
-                font-weight: bold;
-            }}
-            .severity-low {{
-                color: #28a745;
-                font-weight: bold;
-            }}
-            .severity-na {{
-                color: ##ffffff;
-                font-weight: bold;
-            }}
-            .status-failed {{
-                color: #dc3545;
-            }}
-            .status-passed {{
-                color: #28a745;
-            }}
-            .status-na {{
-                color: #ffffff;
-            }}
-            .timestamp {{
-                color: #666;
-                font-size: 0.9em;
-            }}
-            .dataTables_filter {{
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+            th { background-color: #f2f2f2; position: relative; padding-bottom: 30px !important; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            .table-controls { margin: 20px 0; }
+            .column-filter {
+                width: 95%;
+                padding: 5px;
+                margin-bottom: 5px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                position: absolute;
+                bottom: 5px;
+                left: 0;
+            }
+            #searchInput {
+                width: 300px;
+                padding: 8px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
                 margin-bottom: 10px;
-            }}
-            .resolution-link {{
-                color: #0d6efd;
-                text-decoration: none;
-            }}
-            .resolution-link:hover {{
-                text-decoration: underline;
-            }}
+            }
+            .severity-high { color: #d73a4a; font-weight: bold; }
+            .severity-medium { color: #fb8c00; font-weight: bold; }
+            .severity-low { color: #2986cc; font-weight: bold; }
         </style>
     </head>
     <body>
-        <div class="container-fluid">
-            <div class="header">
-                <h1>ReSCO AI/ML Security Assessment Report</h1>
-                <p class="timestamp">Generated: {timestamp}</p>
-                <p>Execution ID: {execution_id}</p>
-            </div>
-            <h2>Findings</h2>
-            <table id="findingsTable" class="table table-striped table-bordered">
-                <thead>
-                    <tr>
-                        <th>Finding</th>
-                        <th>Finding Details</th>
-                        <th>Resolution</th>
-                        <th>Reference</th>
-                        <th>Severity</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {table_rows}
-                </tbody>
-            </table>
+        <h1>ReSCO AI/ML Security Assessment Report</h1>
+        <div class="table-controls">
+            <input type="text" id="searchInput" placeholder="Quick search across all columns...">
         </div>
+        <table id="assessmentTable">
+            <thead>
+                <tr>
+                    <th>Finding</th>
+                    <th>Finding Details</th>
+                    <th>Resolution</th>
+                    <th>Reference</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows}
+            </tbody>
+        </table>
 
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
-        <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
         <script>
-            $(document).ready(function() {{
-                $('#findingsTable').DataTable({{
-                    pageLength: 10,
-                    lengthMenu: [[10, 20, 50, -1], [10, 20, 50, "All"]],
-                    order: [[4, 'desc']], // Sort by Severity by default
-                    columnDefs: [
-                        {{
-                            targets: 2, // Resolution column
-                            render: function(data, type, row) {{
-                                if (type === 'display' && data) {{
-                                    // Split multiple URLs and create links
-                                    const urls = data.split('\\n').map(line => {{
-                                        const urlMatch = line.match(/(https?:\/\/[^\s]+)/g);
-                                        if (urlMatch) {{
-                                            return line.replace(urlMatch[0], 
-                                                `<a href="${{urlMatch[0]}}" class="resolution-link" target="_blank">${{urlMatch[0]}}</a>`);
-                                        }}
-                                        return line;
-                                    }});
-                                    return urls.join('<br>');
-                                }}
-                                return data;
-                            }}
-                        }},
-                        {{
-                            targets: 3, // Reference column
-                            render: function(data, type, row) {{
-                                if (type === 'display' && data) {{
-                                    // Split multiple URLs and create links
-                                    const urls = data.split('\\n').map(url => 
-                                        `<a href="${{url}}" class="resolution-link" target="_blank">${{url}}</a>`);
-                                    return urls.join('<br>');
-                                }}
-                                return data;
-                            }}
-                        }},
-                        {{
-                            targets: 4, // Severity column
-                            render: function(data, type, row) {{
-                                if (type === 'display') {{
-                                    const severityClass = data.toLowerCase() === 'high' ? 'severity-high' :
-                                                        data.toLowerCase() === 'medium' ? 'severity-medium' :
-                                                        data.toLowerCase() === 'low' ? 'severity-low' :
-                                                        'severity-na';
-                                    return `<span class="${{severityClass}}">${{data}}</span>`;
-                                }}
-                                return data;
-                            }}
-                        }},
-                        {{
-                            targets: 5, // Status column
-                            render: function(data, type, row) {{
-                                if (type === 'display') {{
-                                const statusClass = data.toLowerCase() === 'failed' ? 'status-failed' :
-                                                        data.toLowerCase() === 'passed' ? 'status-passed' :
-                                                        'status-na';
-                                    return `<span class="${{statusClass}}">${{data}}</span>`;
-                                }}
-                                return data;
-                            }}
-                        }}
-                    ]
-                }});
-            }});
+        document.addEventListener('DOMContentLoaded', function() {
+            const table = document.querySelector('table');
+            const headers = table.querySelectorAll('th');
+            
+            // Add filter input to each column header
+            headers.forEach((header, index) => {
+                const input = document.createElement('input');
+                input.className = 'column-filter';
+                input.placeholder = `Filter ${header.textContent}...`;
+                input.addEventListener('input', () => filterColumn(index));
+                header.appendChild(input);
+            });
+
+            // Global search functionality
+            document.getElementById('searchInput').addEventListener('input', function() {
+                const searchText = this.value.toLowerCase();
+                const rows = table.querySelectorAll('tbody tr');
+                
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(searchText) ? '' : 'none';
+                });
+            });
+
+            function filterColumn(column) {
+                const filters = Array.from(document.querySelectorAll('.column-filter'))
+                    .map(input => input.value.toLowerCase());
+                
+                const rows = table.querySelectorAll('tbody tr');
+                
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    let shouldShow = true;
+                    
+                    filters.forEach((filter, index) => {
+                        if (filter && !cells[index].textContent.toLowerCase().includes(filter)) {
+                            shouldShow = false;
+                        }
+                    });
+                    
+                    row.style.display = shouldShow ? '' : 'none';
+                });
+            }
+        });
         </script>
     </body>
     </html>
@@ -343,49 +256,27 @@ def generate_html_report(assessment_results: Dict[str, Any]) -> str:
 
     # Generate table rows from assessment results
     rows = []
-    for assessment_type, findings in assessment_results.get('bedrock', {}).items():
-        for finding in findings:
-            row = f"""
+    for result in assessment_results:
+        for finding in result.get('body', {}).get('findings', []):
+            for data in finding.get('csv_data', []):
+                severity_class = f"severity-{data['Severity'].lower()}" if 'Severity' in data else ""
+                row = f"""
                 <tr>
-                    <td>Bedrock - {finding.get('Finding', 'N/A')}</td>
-                    <td>{finding.get('Finding_Details', 'N/A')}</td>
-                    <td>{finding.get('Resolution', 'N/A')}</td>
-                    <td>{finding.get('Reference', 'N/A')}</td>
-                    <td>{finding.get('Severity', 'Low')}</td>
-                    <td>{finding.get('Status', 'Open')}</td>
+                    <td>{data.get('Finding', '')}</td>
+                    <td>{data.get('Finding_Details', '')}</td>
+                    <td>{data.get('Resolution', '')}</td>
+                    <td><a href="{data.get('Reference', '')}" target="_blank">{data.get('Reference', '')}</a></td>
+                    <td class="{severity_class}">{data.get('Severity', '')}</td>
+                    <td>{data.get('Status', '')}</td>
                 </tr>
-            """
-            rows.append(row)
-    
-    for assessment_type, findings in assessment_results.get('sagemaker', {}).items():
-        for finding in findings:
-            row = f"""
-                <tr>
-                    <td>SageMaker - {finding.get('Finding', 'N/A')}</td>
-                    <td>{finding.get('Finding_Details', 'N/A')}</td>
-                    <td>{finding.get('Resolution', 'N/A')}</td>
-                    <td>{finding.get('Reference', 'N/A')}</td>
-                    <td>{finding.get('Severity', 'Low')}</td>
-                    <td>{finding.get('Status', 'Open')}</td>
-                </tr>
-            """
-            rows.append(row)
+                """
+                rows.append(row)
 
-    # Generate the HTML content
-    html_content = html_template.format(
-        timestamp=assessment_results.get('timestamp', 'N/A'),
-        execution_id=assessment_results.get('execution_id', 'N/A'),
-        total_files=assessment_results.get('summary', {}).get('total_files_processed', 0),
-        categories=', '.join(assessment_results.get('summary', {}).get('categories_found', [])),
-        table_rows='\n'.join(rows),
-        high_count=severity_counts.get('High', 0),
-        medium_count=severity_counts.get('Medium', 0),
-        low_count=severity_counts.get('Low', 0),
-        info_count=severity_counts.get('Informational', 0)
-    )
-
+    # Replace {rows} placeholder with generated rows
+    html_content = html_template.format(rows='\n'.join(rows))
     
     return html_content
+
 
 
 def get_current_utc_date():
