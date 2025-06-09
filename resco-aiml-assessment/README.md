@@ -42,8 +42,8 @@ Security Assessments for:
 
 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/resco-assessments.git
-cd resco-assessments/resco-aiml-assessment
+git clone https://github.com/aws-samples/sample-resco-assessments.git
+cd sample-resco-assessments/resco-aiml-assessment
 ```
 
 2. Build the SAM application
