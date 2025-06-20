@@ -1,0 +1,20 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      - pip install --upgrade pip
+      - pip install --upgrade aws-sam-cli
+  build:
+    commands:
+      - echo "Starting ReSCO AIML Assessment"
+      - echo "Multi-account scan is $MULTI_ACCOUNT_SCAN"
+      - cd resco-aiml-assessment
+      - sam build --use-container --template template-multi-account.yaml
+      - sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --parameter-overrides BucketName=$BUCKET_REPORT
+      - STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
+      - aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
+  post_build:
+    commands:
+      - echo "Assessment completed. Results in S3:$BUCKET_REPORT"

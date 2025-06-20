@@ -286,6 +286,9 @@ Resources:
           - Name: BUCKET_REPORT
             Value: !Ref ReSCOAssessmentBucket
             Type: PLAINTEXT
+          - Name: GITHUB_REPO_URL
+            Value: !Ref GitHubRepoUrl
+            Type: PLAINTEXT
           - Name: RESCO_ROLE
             Value: !Ref ReSCORole
             Type: PLAINTEXT
@@ -312,69 +315,6 @@ Resources:
       Source:
         Type: GITHUB
         Location: !Ref GitHubRepoUrl
-        BuildSpec: |
-          version: 0.2
-          phases:
-            install:
-              runtime-versions:
-                python: 3.9
-              commands:
-                - pip install --upgrade pip
-                - pip install --upgrade aws-sam-cli
-            
-            build:
-              commands:
-                - |
-                  if [[ $MULTI_ACCOUNT_SCAN = 'true' ]]; then
-                      echo "Running multi-account assessment."
-                      
-                      if [[ $MULTI_ACCOUNT_LIST_OVERRIDE != '' ]]; then
-                          echo "Using account overrides."    
-                          account_list=$MULTI_ACCOUNT_LIST_OVERRIDE
-                      elif [[ $MULTI_ACCOUNT_LIST_OVERRIDE = '' ]]; then
-                          echo "Using accounts from aws organizations." 
-                          account_list=$(aws organizations list-accounts --query 'Accounts[?Status==`ACTIVE`].Id' --output text)
-                      fi
-                      
-                      echo "Using accounts $account_list."
-
-                      for accountId in $account_list; do
-                          test "$(jobs | wc -l)" -ge $PARALLEL_ACCOUNTS && wait || true
-                          {
-                              echo "Running ReSCO assessment for account $accountId"
-                              # Assume role and run assessment
-                              aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment-$accountId > /tmp/creds-$accountId.json
-                              
-                              export AWS_ACCESS_KEY_ID=$(cat /tmp/creds-$accountId.json | jq -r '.Credentials.AccessKeyId')
-                              export AWS_SECRET_ACCESS_KEY=$(cat /tmp/creds-$accountId.json | jq -r '.Credentials.SecretAccessKey')
-                              export AWS_SESSION_TOKEN=$(cat /tmp/creds-$accountId.json | jq -r '.Credentials.SessionToken')
-                              
-                              cd resco-aiml-assessment
-                              sam build --use-container --template template-multi-account.yaml
-                              sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides BucketName=$BUCKET_REPORT
-                              
-                              # Get the state machine ARN and execute
-                              STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
-                              aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}"
-                              
-                              unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
-                              cd ..
-                          } &
-                      done
-                      wait
-                  else
-                      echo "Running single account assessment."
-                      cd resco-aiml-assessment
-                      sam build --use-container --template template-multi-account.yaml
-                      sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides BucketName=$BUCKET_REPORT
-                      
-                      STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
-                      aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
-                  fi
-            
-            post_build:
-              commands:
-                - echo "Assessment completed. Results stored in S3 bucket: $BUCKET_REPORT"
 
   # Lambda function to start CodeBuild
   CodeBuildStartBuildLambdaRole:
