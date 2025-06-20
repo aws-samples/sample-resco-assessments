@@ -12,8 +12,10 @@ phases:
       - echo "Multi-account scan is $MULTI_ACCOUNT_SCAN"
       - cd resco-aiml-assessment
       - sam build --use-container --template template-multi-account.yaml
-      - echo "Deploying with verbose output"
-      - sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --resolve-s3 --parameter-overrides BucketName=$BUCKET_REPORT --debug
+      - echo "Cleaning up any failed SAM managed stacks"
+      - aws cloudformation delete-stack --stack-name aws-sam-cli-managed-default || echo "No managed stack to delete"
+      - echo "Deploying with specific S3 bucket"
+      - sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT
       - echo "Checking if stack was created successfully"
       - aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].StackStatus' || echo "Stack not found"
       - STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
