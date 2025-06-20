@@ -1,0 +1,293 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  resco-aiml-assessment
+
+  Multi-account SAM Template for resco-aiml-assessment
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: S3 bucket name for storing assessment results
+    Default: ''
+
+Conditions:
+  CreateBucket: !Equals [!Ref BucketName, '']
+
+Resources:
+  AIMLAssessmentStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine/resco_assessments.asl.json
+      DefinitionSubstitutions:
+        IAMPermissionCachingFunction: !GetAtt IAMPermissionCachingFunction.Arn
+        BedrockSecurityAssessmentFunction: !GetAtt BedrockSecurityAssessmentFunction.Arn
+        SagemakerSecurityAssessmentFunction: !GetAtt SagemakerSecurityAssessmentFunction.Arn
+        GenerateConsolidatedReportFunction: !GetAtt GenerateConsolidatedReportFunction.Arn
+        AIMLAssessmentBucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref BedrockSecurityAssessmentFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref IAMPermissionCachingFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SagemakerSecurityAssessmentFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref GenerateConsolidatedReportFunction
+        - S3CrudPolicy:
+            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+
+  IAMPermissionCachingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: IAMPermissionCachingFunction
+      CodeUri: functions/security/iam_permission_caching/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 600
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AIML_ASSESSMENT_BUCKET_NAME: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+        - Statement:
+            - Sid: IAMPermissions
+              Effect: Allow
+              Action:
+                - iam:ListRoles
+                - iam:ListUsers
+                - iam:ListAttachedRolePolicies
+                - iam:ListAttachedUserPolicies
+                - iam:ListRolePolicies
+                - iam:ListUserPolicies
+                - iam:GetRolePolicy
+                - iam:GetUserPolicy
+                - iam:GetPolicy
+                - iam:GetPolicyVersion
+                - iam:GenerateServiceLastAccessedDetails
+                - iam:GetServiceLastAccessedDetails
+                - sts:GetCallerIdentity
+              Resource: '*'
+
+  GenerateConsolidatedReportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GenerateConsolidatedReportFunction
+      CodeUri: functions/security/generate_consolidated_report/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 600
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AIML_ASSESSMENT_BUCKET_NAME: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+
+  BedrockSecurityAssessmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BedrockSecurityAssessment
+      CodeUri: functions/security/bedrock_assessments/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 600
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AIML_ASSESSMENT_BUCKET_NAME: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+        - Statement:
+            - Sid: IAMPermissions
+              Effect: Allow
+              Action:
+                - iam:ListRoles
+                - iam:ListUsers
+                - iam:ListAttachedRolePolicies
+                - iam:ListAttachedUserPolicies
+                - iam:ListRolePolicies
+                - iam:ListUserPolicies
+                - iam:GetRolePolicy
+                - iam:GetUserPolicy
+                - iam:GetPolicy
+                - iam:GetPolicyVersion
+                - iam:GenerateServiceLastAccessedDetails
+                - iam:GetServiceLastAccessedDetails
+                - sts:GetCallerIdentity
+              Resource: '*'
+            - Sid: BedrockAssessmentPermissions
+              Effect: Allow
+              Action:
+                - bedrock:ListGuardrails
+                - bedrock:GetGuardrail
+                - bedrock:ListModelInvocations
+                - bedrock:GetModelInvocationLoggingConfiguration
+                - bedrock:ListPrompts
+                - bedrock:GetPrompt
+                - bedrock:ListAgents
+                - bedrock:GetAgent
+              Resource: '*'
+            - Sid: CloudTrailPermissions
+              Effect: Allow
+              Action:
+                - cloudtrail:ListTrails
+                - cloudtrail:GetTrail
+                - cloudtrail:GetEventSelectors
+              Resource: '*'
+            - Sid: LambdaPermissions
+              Effect: Allow
+              Action:
+                - lambda:ListFunctions
+              Resource: '*'
+            - Sid: ECSPermissions
+              Effect: Allow
+              Action:
+                - ecs:ListClusters
+                - ecs:ListTasks
+                - ecs:DescribeTasks
+              Resource: '*'
+            - Sid: EC2Permissions
+              Effect: Allow
+              Action:
+                - ec2:DescribeVpcEndpoints
+                - ec2:DescribeVpcs
+              Resource: '*'
+
+  SagemakerSecurityAssessmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SagemakerSecurityAssessment
+      CodeUri: functions/security/sagemaker_assessments/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 600
+      MemorySize: 1024
+      Environment:
+        Variables:
+          AIML_ASSESSMENT_BUCKET_NAME: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+        - Statement:
+            - Sid: IAMPermissions
+              Effect: Allow
+              Action:
+                - iam:ListRoles
+                - iam:ListUsers
+                - iam:ListAttachedRolePolicies
+                - iam:ListAttachedUserPolicies
+                - iam:ListRolePolicies
+                - iam:ListUserPolicies
+                - iam:GetRolePolicy
+                - iam:GetUserPolicy
+                - iam:GetPolicy
+                - iam:GetPolicyVersion
+                - iam:GenerateServiceLastAccessedDetails
+                - iam:GetServiceLastAccessedDetails
+                - sts:GetCallerIdentity
+              Resource: '*'
+            - Sid: LambdaPermissions
+              Effect: Allow
+              Action:
+                - lambda:ListFunctions
+              Resource: '*'
+        - Statement:
+            - Sid: SageMakerPermissions
+              Effect: Allow
+              Action:
+                - sagemaker:ListNotebookInstances
+                - sagemaker:DescribeNotebookInstance
+                - sagemaker:ListDomains
+                - sagemaker:DescribeDomain
+                - sagemaker:ListTrainingJobs
+                - sagemaker:DescribeTrainingJob
+                - kms:DescribeKey
+                - kms:ListAliases
+                - sagemaker:ListModelPackageGroups
+                - sagemaker:ListModelPackages
+                - sagemaker:ListFeatureGroups
+                - sagemaker:ListPipelines
+                - sagemaker:ListPipelineExecutions
+                - sagemaker:ListProcessingJobs
+                - sagemaker:DescribeProcessingJob
+                - sagemaker:ListMonitoringSchedules
+                - sagemaker:DescribeMonitoringSchedule
+              Resource: '*'
+        - Statement:
+            - Sid: GuardDutyPermissions
+              Effect: Allow
+              Action:
+                - guardduty:GetFindings
+                - guardduty:ListFindings
+                - guardduty:ListDetectors
+                - guardduty:GetDetector
+                - guardduty:GetFindingsStatistics
+                - guardduty:ListPublishingDestinations
+                - guardduty:ListTagsForResource
+                - guardduty:GetMemberDetectors
+                - guardduty:DescribeMalwareScans
+                - guardduty:GetRemainingFreeTrialDays
+                - guardduty:GetUsageStatistics
+              Resource: '*'
+        - Statement:
+            - Sid: EC2Permissions
+              Effect: Allow
+              Action:
+                - ec2:DescribeVpcEndpoints
+                - ec2:DescribeVpcs
+              Resource: '*'
+
+  # S3 bucket (only created if BucketName parameter is empty)
+  AIMLAssessmentBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateBucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-aiml-assessment-bucket-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  AssessmentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateBucket
+    Properties:
+      Bucket: !Ref AIMLAssessmentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: SecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: 
+              - !Sub '${AIMLAssessmentBucket.Arn}/*'
+              - !GetAtt AIMLAssessmentBucket.Arn
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+Outputs:
+  AIMLAssessmentStateMachineArn:
+    Description: "AIML Assessment State Machine"
+    Value: !Ref AIMLAssessmentStateMachine
+  AssessmentBucketName:
+    Description: Name of the S3 bucket where assessment reports are stored
+    Value: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]

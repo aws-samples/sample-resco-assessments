@@ -1,0 +1,510 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: ReSCO AIML Multi-Account Security Assessment Solution
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: ReSCO Assessment Options
+        Parameters:
+          - MultiAccountScan
+          - MultiAccountListOverride
+          - EmailAddress
+      - Label:
+          default: Advanced Options
+        Parameters:
+          - ConcurrentAccountScans
+          - CodeBuildTimeout
+          - ReSCORole
+          - GitHubRepoUrl
+
+Parameters:
+  GitHubRepoUrl:
+    Type: String
+    Description: GitHub repository URL
+    Default: https://github.com/aws-samples/sample-resco-assessments
+  
+  ReSCORole:
+    Description: 'The role that ReSCO should assume to perform the assessment.'
+    Type: String
+    Default: ReSCOAIMLMemberRole
+  
+  MultiAccountScan:
+    Description: 'Set this to true if you want to scan all accounts in your organization.'
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  
+  MultiAccountListOverride:
+    Description: 'Specify a space delimited list of accounts to scan. Leaving this blank will scan all accounts in your organization.'
+    Type: String
+    Default: ''
+  
+  EmailAddress:
+    Description: 'Specify an address if you want to receive an email when the assessment completes.'
+    Type: String
+    Default: ''
+  
+  ConcurrentAccountScans:
+    Description: 'For multi-account scans, specify the number of accounts to scan concurrently.'
+    Type: String
+    AllowedValues:
+      - 'Three'
+      - 'Six'
+      - 'Twelve'
+    Default: 'Three'
+  
+  CodeBuildTimeout:
+    Description: 'Set the timeout for the CodeBuild job. The default is 300 minutes (5 hours).'
+    Type: Number
+    MinValue: 5
+    MaxValue: 2160
+    Default: 300
+
+Conditions:
+  CreateReSCORole: !Equals
+    - !Ref MultiAccountScan
+    - false
+  
+  CreateEmailNotification: !Not [!Equals [!Ref EmailAddress, '']]
+
+Mappings:
+  CodeBuildPerformanceOptionMap:
+    Three:
+      ParallelAccounts: 3
+      CodeBuildComputeType: BUILD_GENERAL1_SMALL
+    Six:
+      ParallelAccounts: 6
+      CodeBuildComputeType: BUILD_GENERAL1_MEDIUM
+    Twelve:
+      ParallelAccounts: 12
+      CodeBuildComputeType: BUILD_GENERAL1_LARGE
+
+Resources:
+  # Local ReSCO role for single account assessments
+  ReSCOMemberRole:
+    Condition: CreateReSCORole
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Path: '/service-role/'
+      RoleName: ReSCOAIMLMemberRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root' 
+            Action:
+              - 'sts:AssumeRole'
+            Condition:
+              ArnEquals:
+                aws:PrincipalArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/service-role/ReSCOCodeBuildRole
+      Policies:
+        - PolicyName: ReSCOAIMLAssessmentPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:ListRoles
+                  - iam:ListUsers
+                  - iam:ListAttachedRolePolicies
+                  - iam:ListAttachedUserPolicies
+                  - iam:ListRolePolicies
+                  - iam:ListUserPolicies
+                  - iam:GetRolePolicy
+                  - iam:GetUserPolicy
+                  - iam:GetPolicy
+                  - iam:GetPolicyVersion
+                  - iam:GenerateServiceLastAccessedDetails
+                  - iam:GetServiceLastAccessedDetails
+                  - sts:GetCallerIdentity
+                  - bedrock:ListGuardrails
+                  - bedrock:GetGuardrail
+                  - bedrock:ListModelInvocations
+                  - bedrock:GetModelInvocationLoggingConfiguration
+                  - bedrock:ListPrompts
+                  - bedrock:GetPrompt
+                  - bedrock:ListAgents
+                  - bedrock:GetAgent
+                  - sagemaker:ListNotebookInstances
+                  - sagemaker:DescribeNotebookInstance
+                  - sagemaker:ListDomains
+                  - sagemaker:DescribeDomain
+                  - sagemaker:ListTrainingJobs
+                  - sagemaker:DescribeTrainingJob
+                  - sagemaker:ListModelPackageGroups
+                  - sagemaker:ListModelPackages
+                  - sagemaker:ListFeatureGroups
+                  - sagemaker:ListPipelines
+                  - sagemaker:ListPipelineExecutions
+                  - sagemaker:ListProcessingJobs
+                  - sagemaker:DescribeProcessingJob
+                  - sagemaker:ListMonitoringSchedules
+                  - sagemaker:DescribeMonitoringSchedule
+                  - cloudtrail:ListTrails
+                  - cloudtrail:GetTrail
+                  - cloudtrail:GetEventSelectors
+                  - lambda:ListFunctions
+                  - ecs:ListClusters
+                  - ecs:ListTasks
+                  - ecs:DescribeTasks
+                  - ec2:DescribeVpcEndpoints
+                  - ec2:DescribeVpcs
+                  - kms:DescribeKey
+                  - kms:ListAliases
+                  - guardduty:GetFindings
+                  - guardduty:ListFindings
+                  - guardduty:ListDetectors
+                  - guardduty:GetDetector
+                  - guardduty:GetFindingsStatistics
+                  - guardduty:ListPublishingDestinations
+                  - guardduty:ListTagsForResource
+                  - guardduty:GetMemberDetectors
+                  - guardduty:DescribeMalwareScans
+                  - guardduty:GetRemainingFreeTrialDays
+                  - guardduty:GetUsageStatistics
+                Resource: '*'
+
+  # S3 bucket for assessment results
+  ReSCOAssessmentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ReSCOAssessmentBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref ReSCOAssessmentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowSSLRequestsOnly
+            Principal: '*'
+            Action: 's3:*'
+            Effect: Deny
+            Resource:
+              - !Sub '${ReSCOAssessmentBucket.Arn}'
+              - !Sub '${ReSCOAssessmentBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  # CodeBuild role for running assessments
+  ReSCOCodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: '/service-role/'
+      RoleName: ReSCOCodeBuildRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Condition:
+              StringEquals:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/ReSCOCodeBuild'
+      Policies:
+        - PolicyName: LogGroup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*'
+        - PolicyName: UploadtoS3
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Effect: Allow
+                Resource: !Sub '${ReSCOAssessmentBucket.Arn}/*'
+        - PolicyName: AssumeRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - sts:AssumeRole
+                Effect: Allow
+                Resource: !Sub 'arn:${AWS::Partition}:iam::*:role/service-role/ReSCOAIMLMemberRole'
+        - PolicyName: ListOrganizationAccounts
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - organizations:ListAccounts
+                  - organizations:DescribeAccount
+                  - organizations:ListTagsForResource
+                Effect: Allow
+                Resource: '*'
+        - PolicyName: CloudFormationPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - cloudformation:*
+                Effect: Allow
+                Resource: '*'
+        - PolicyName: SAMPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - lambda:*
+                  - apigateway:*
+                  - iam:*
+                  - states:*
+                Effect: Allow
+                Resource: '*'
+
+  # CodeBuild project for running assessments
+  ReSCOCodeBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: ReSCOCodeBuild
+      Environment:
+        ComputeType: !FindInMap [CodeBuildPerformanceOptionMap, !Ref ConcurrentAccountScans, 'CodeBuildComputeType']
+        Image: "aws/codebuild/amazonlinux2-x86_64-standard:4.0"
+        Type: "LINUX_CONTAINER"
+        EnvironmentVariables:
+          - Name: BUCKET_REPORT
+            Value: !Ref ReSCOAssessmentBucket
+            Type: PLAINTEXT
+          - Name: RESCO_ROLE
+            Value: !Ref ReSCORole
+            Type: PLAINTEXT
+          - Name: MULTI_ACCOUNT_SCAN
+            Value: !Ref MultiAccountScan
+            Type: PLAINTEXT
+          - Name: MULTI_ACCOUNT_LIST_OVERRIDE
+            Value: !Ref MultiAccountListOverride
+            Type: PLAINTEXT
+          - Name: AWS_PARTITION
+            Value: !Sub ${AWS::Partition}
+            Type: PLAINTEXT
+          - Name: AWS_ACCOUNT_ID
+            Value: !Sub ${AWS::AccountId}
+            Type: PLAINTEXT
+          - Name: PARALLEL_ACCOUNTS
+            Value: !FindInMap [CodeBuildPerformanceOptionMap, !Ref ConcurrentAccountScans, 'ParallelAccounts']
+            Type: PLAINTEXT
+      Description: Run ReSCO AIML assessment
+      ServiceRole: !GetAtt ReSCOCodeBuildRole.Arn
+      TimeoutInMinutes: !Ref CodeBuildTimeout
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        Type: GITHUB
+        Location: !Ref GitHubRepoUrl
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                python: 3.9
+              commands:
+                - pip install --upgrade pip
+                - pip install --upgrade aws-sam-cli
+            
+            build:
+              commands:
+                - |
+                  if [[ $MULTI_ACCOUNT_SCAN = 'true' ]]; then
+                      echo "Running multi-account assessment."
+                      
+                      if [[ $MULTI_ACCOUNT_LIST_OVERRIDE != '' ]]; then
+                          echo "Using account overrides."    
+                          account_list=$MULTI_ACCOUNT_LIST_OVERRIDE
+                      elif [[ $MULTI_ACCOUNT_LIST_OVERRIDE = '' ]]; then
+                          echo "Using accounts from aws organizations." 
+                          account_list=$(aws organizations list-accounts --query 'Accounts[?Status==`ACTIVE`].Id' --output text)
+                      fi
+                      
+                      echo "Using accounts $account_list."
+
+                      for accountId in $account_list; do
+                          test "$(jobs | wc -l)" -ge $PARALLEL_ACCOUNTS && wait || true
+                          {
+                              echo "Running ReSCO assessment for account $accountId"
+                              # Assume role and run assessment
+                              aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment-$accountId > /tmp/creds-$accountId.json
+                              
+                              export AWS_ACCESS_KEY_ID=$(cat /tmp/creds-$accountId.json | jq -r '.Credentials.AccessKeyId')
+                              export AWS_SECRET_ACCESS_KEY=$(cat /tmp/creds-$accountId.json | jq -r '.Credentials.SecretAccessKey')
+                              export AWS_SESSION_TOKEN=$(cat /tmp/creds-$accountId.json | jq -r '.Credentials.SessionToken')
+                              
+                              cd resco-aiml-assessment
+                              sam build --use-container --template template-multi-account.yaml
+                              sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides BucketName=$BUCKET_REPORT
+                              
+                              # Get the state machine ARN and execute
+                              STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
+                              aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}"
+                              
+                              unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+                              cd ..
+                          } &
+                      done
+                      wait
+                  else
+                      echo "Running single account assessment."
+                      cd resco-aiml-assessment
+                      sam build --use-container --template template-multi-account.yaml
+                      sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides BucketName=$BUCKET_REPORT
+                      
+                      STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
+                      aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
+                  fi
+            
+            post_build:
+              commands:
+                - echo "Assessment completed. Results stored in S3 bucket: $BUCKET_REPORT"
+
+  # Lambda function to start CodeBuild
+  CodeBuildStartBuildLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StartBuildInline
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'codebuild:StartBuild'
+                Resource: !GetAtt ReSCOCodeBuild.Arn
+
+  CodeBuildStartBuildLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Role: !Sub ${CodeBuildStartBuildLambdaRole.Arn}
+      Timeout: 120
+      Runtime: python3.10
+      Code:
+        ZipFile: |
+          import boto3
+          from botocore.exceptions import ClientError
+          import cfnresponse
+                    
+          def startBuild(event, context):
+            responseData = {}
+            cb = boto3.client('codebuild')
+            try:
+              print("Starting build...")
+              response = cb.start_build(projectName=event['ResourceProperties']['ProjectName'])
+              responseData['buildID'] = response['build']['id']
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+            except ClientError as e:
+              print("Failed to start build")
+              print(e)
+              cfnresponse.send(event, context, cfnresponse.FAILED, e.response)
+
+          def no_op(event, context):
+            responseData = {}
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+
+          def lambda_handler(event,context):
+            print(event)
+            if event['RequestType'] == 'Create':
+              startBuild(event, context)
+            else:
+              no_op(event,context)
+
+  CodeBuildStartBuild:
+    Type: Custom::CodeBuildStartBuild
+    Properties:
+      ServiceToken: !GetAtt CodeBuildStartBuildLambda.Arn
+      ProjectName: !Ref ReSCOCodeBuild
+
+  # SNS topic for notifications (optional)
+  ReSCONotificationTopic:
+    Condition: CreateEmailNotification
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription: 
+        - Endpoint: !Ref EmailAddress
+          Protocol: email
+
+  ReSCOSnsNotificationsPolicy:
+    Condition: CreateEmailNotification
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: snsNotificationsPolicy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Allow events
+            Effect: Allow
+            Principal:
+              Service: 'events.amazonaws.com'
+            Action:
+              - sns:Publish
+            Resource: !Ref ReSCONotificationTopic
+      Topics:
+        - !Ref ReSCONotificationTopic
+
+  CodeBuildStateChangeRule:
+    Condition: CreateEmailNotification
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: default
+      EventPattern:
+        source:
+          - aws.codebuild
+        detail-type:
+          - CodeBuild Build State Change
+        detail:
+          build-status:
+            - SUCCEEDED
+            - FAILED
+            - STOPPED
+          project-name:
+            - !Ref ReSCOCodeBuild
+      State: ENABLED
+      Targets:
+        - Id: toSNS
+          Arn: !Ref ReSCONotificationTopic
+          InputTransformer:
+            InputPathsMap:
+              build-status: $.detail.build-status
+              bucket: $.detail.additional-information.environment.environment-variables[0].value
+            InputTemplate: >-
+              "The ReSCO AIML assessment has <build-status>."
+
+              "You can view your results in the <bucket> bucket."
+
+Outputs:
+  AccountID: 
+    Description: ID that ReSCO is running from
+    Value: !GetAtt ReSCOCodeBuildRole.Arn
+  
+  AssessmentBucket:
+    Description: S3 bucket containing assessment results
+    Value: !Ref ReSCOAssessmentBucket

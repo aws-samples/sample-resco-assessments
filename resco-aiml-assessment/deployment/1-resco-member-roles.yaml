@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template deploys the roles needed for ReSCO AIML Assessment to run in each member account.
+
+Parameters:
+  ReSCOAccountID:
+    Description: 'Specifies the account ID where ReSCO AIML Assessment will run from.'
+    Type: String
+    Default: '012345678910'
+    AllowedPattern: \d{12}
+    ConstraintDescription: Enter the 12 digit account ID with no spaces.
+
+Resources:
+  ReSCOMemberRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Path: '/service-role/'
+      RoleName: ReSCOAIMLMemberRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${ReSCOAccountID}:root' 
+            Action:
+              - 'sts:AssumeRole'
+            Condition:
+              ArnEquals:
+                aws:PrincipalArn: !Sub arn:${AWS::Partition}:iam::${ReSCOAccountID}:role/service-role/ReSCOCodeBuildRole
+      Policies:
+        - PolicyName: ReSCOAIMLAssessmentPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # IAM Permissions for assessment
+              - Effect: Allow
+                Action:
+                  - iam:ListRoles
+                  - iam:ListUsers
+                  - iam:ListAttachedRolePolicies
+                  - iam:ListAttachedUserPolicies
+                  - iam:ListRolePolicies
+                  - iam:ListUserPolicies
+                  - iam:GetRolePolicy
+                  - iam:GetUserPolicy
+                  - iam:GetPolicy
+                  - iam:GetPolicyVersion
+                  - iam:GenerateServiceLastAccessedDetails
+                  - iam:GetServiceLastAccessedDetails
+                  - sts:GetCallerIdentity
+                Resource: '*'
+              # Bedrock Assessment Permissions
+              - Effect: Allow
+                Action:
+                  - bedrock:ListGuardrails
+                  - bedrock:GetGuardrail
+                  - bedrock:ListModelInvocations
+                  - bedrock:GetModelInvocationLoggingConfiguration
+                  - bedrock:ListPrompts
+                  - bedrock:GetPrompt
+                  - bedrock:ListAgents
+                  - bedrock:GetAgent
+                Resource: '*'
+              # SageMaker Assessment Permissions
+              - Effect: Allow
+                Action:
+                  - sagemaker:ListNotebookInstances
+                  - sagemaker:DescribeNotebookInstance
+                  - sagemaker:ListDomains
+                  - sagemaker:DescribeDomain
+                  - sagemaker:ListTrainingJobs
+                  - sagemaker:DescribeTrainingJob
+                  - sagemaker:ListModelPackageGroups
+                  - sagemaker:ListModelPackages
+                  - sagemaker:ListFeatureGroups
+                  - sagemaker:ListPipelines
+                  - sagemaker:ListPipelineExecutions
+                  - sagemaker:ListProcessingJobs
+                  - sagemaker:DescribeProcessingJob
+                  - sagemaker:ListMonitoringSchedules
+                  - sagemaker:DescribeMonitoringSchedule
+                Resource: '*'
+              # CloudTrail Permissions
+              - Effect: Allow
+                Action:
+                  - cloudtrail:ListTrails
+                  - cloudtrail:GetTrail
+                  - cloudtrail:GetEventSelectors
+                Resource: '*'
+              # Lambda Permissions
+              - Effect: Allow
+                Action:
+                  - lambda:ListFunctions
+                Resource: '*'
+              # ECS Permissions
+              - Effect: Allow
+                Action:
+                  - ecs:ListClusters
+                  - ecs:ListTasks
+                  - ecs:DescribeTasks
+                Resource: '*'
+              # EC2 Permissions
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeVpcEndpoints
+                  - ec2:DescribeVpcs
+                Resource: '*'
+              # KMS Permissions
+              - Effect: Allow
+                Action:
+                  - kms:DescribeKey
+                  - kms:ListAliases
+                Resource: '*'
+              # GuardDuty Permissions
+              - Effect: Allow
+                Action:
+                  - guardduty:GetFindings
+                  - guardduty:ListFindings
+                  - guardduty:ListDetectors
+                  - guardduty:GetDetector
+                  - guardduty:GetFindingsStatistics
+                  - guardduty:ListPublishingDestinations
+                  - guardduty:ListTagsForResource
+                  - guardduty:GetMemberDetectors
+                  - guardduty:DescribeMalwareScans
+                  - guardduty:GetRemainingFreeTrialDays
+                  - guardduty:GetUsageStatistics
+                Resource: '*'
+
+Outputs:
+  ReSCOMemberRoleArn:
+    Description: ARN of the ReSCO AIML Member Role
+    Value: !GetAtt ReSCOMemberRole.Arn
