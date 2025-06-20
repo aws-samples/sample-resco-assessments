@@ -10,16 +10,39 @@ phases:
     commands:
       - echo "Starting ReSCO AIML Assessment"
       - echo "Multi-account scan is $MULTI_ACCOUNT_SCAN"
-      - cd resco-aiml-assessment
+      - |
+        if [[ $MULTI_ACCOUNT_SCAN = 'true' ]]; then
+          echo "Getting list of accounts to scan"
+          if [[ $MULTI_ACCOUNT_LIST_OVERRIDE != '' ]]; then
+            account_list=$MULTI_ACCOUNT_LIST_OVERRIDE
+          else
+            account_list=$(aws organizations list-accounts --query 'Accounts[?Status==`ACTIVE`].Id' --output text)
+          fi
+          echo "Will scan accounts: $account_list"
+          for accountId in $account_list; do
+            echo "Processing account $accountId"
+            aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment > /tmp/creds.json
+            export AWS_ACCESS_KEY_ID=$(cat /tmp/creds.json | jq -r '.Credentials.AccessKeyId')
+            export AWS_SECRET_ACCESS_KEY=$(cat /tmp/creds.json | jq -r '.Credentials.SecretAccessKey')
+            export AWS_SESSION_TOKEN=$(cat /tmp/creds.json | jq -r '.Credentials.SessionToken')
+            cd resco-aiml-assessment
+            sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT
+            STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
+            aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
+            unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+            cd ..
+          done
+        else
+          cd resco-aiml-assessment
+        fi
       - sam build --use-container --template template-multi-account.yaml
-      - echo "Cleaning up any failed SAM managed stacks"
-      - aws cloudformation delete-stack --stack-name aws-sam-cli-managed-default || echo "No managed stack to delete"
-      - echo "Deploying with specific S3 bucket"
-      - sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT
-      - echo "Checking if stack was created successfully"
-      - aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].StackStatus' || echo "Stack not found"
-      - STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
-      - aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
+      - |
+        if [[ $MULTI_ACCOUNT_SCAN != 'true' ]]; then
+          echo "Single account deployment"
+          sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT
+          STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
+          aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
+        fi
   post_build:
     commands:
       - echo "Assessment completed. Results in S3:$BUCKET_REPORT"
