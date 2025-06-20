@@ -10,6 +10,11 @@ phases:
     commands:
       - echo "Starting ReSCO AIML Assessment"
       - echo "Multi-account scan is $MULTI_ACCOUNT_SCAN"
+      - cd resco-aiml-assessment
+      - ls -la
+      - sam build --use-container --template template-multi-account.yaml
+      - echo "Build completed, checking build directory:"
+      - ls -la .aws-sam/build/
       - |
         if [[ $MULTI_ACCOUNT_SCAN = 'true' ]]; then
           echo "Getting list of accounts to scan"
@@ -21,23 +26,21 @@ phases:
           echo "Will scan accounts: $account_list"
           for accountId in $account_list; do
             echo "Processing account $accountId"
-            aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment > /tmp/creds.json
+            aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment > /tmp/creds.json || continue
             export AWS_ACCESS_KEY_ID=$(cat /tmp/creds.json | jq -r '.Credentials.AccessKeyId')
             export AWS_SECRET_ACCESS_KEY=$(cat /tmp/creds.json | jq -r '.Credentials.SecretAccessKey')
             export AWS_SESSION_TOKEN=$(cat /tmp/creds.json | jq -r '.Credentials.SessionToken')
-            cd resco-aiml-assessment
-            sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT
-            STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
-            aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
+            echo "Deploying to account $accountId"
+            echo "Checking if template exists:"
+            ls -la .aws-sam/build/template.yaml || echo "Template not found"
+            sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for $accountId"
+            STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
+            if [[ $STATE_MACHINE_ARN != "" ]]; then
+              aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
+            fi
             unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
-            cd ..
           done
         else
-          cd resco-aiml-assessment
-        fi
-      - sam build --use-container --template template-multi-account.yaml
-      - |
-        if [[ $MULTI_ACCOUNT_SCAN != 'true' ]]; then
           echo "Single account deployment"
           sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT
           STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
