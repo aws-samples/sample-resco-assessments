@@ -12,7 +12,7 @@ phases:
       - echo "Multi-account scan is $MULTI_ACCOUNT_SCAN"
       - cd resco-aiml-assessment
       - sam build --use-container --template template-multi-account.yaml
-      - sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --parameter-overrides BucketName=$BUCKET_REPORT
+      - sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --resolve-s3 --parameter-overrides BucketName=$BUCKET_REPORT
       - STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text)
       - aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
   post_build:
