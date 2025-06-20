@@ -31,9 +31,8 @@ phases:
             export AWS_SECRET_ACCESS_KEY=$(cat /tmp/creds.json | jq -r '.Credentials.SecretAccessKey')
             export AWS_SESSION_TOKEN=$(cat /tmp/creds.json | jq -r '.Credentials.SessionToken')
             echo "Deploying to account $accountId"
-            echo "Checking if template exists:"
-            ls -la .aws-sam/build/template.yaml || echo "Template not found"
-            sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for $accountId"
+            aws cloudformation delete-stack --stack-name aws-sam-cli-managed-default || echo "No managed stack to delete in $accountId"
+            sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --resolve-s3 --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for $accountId"
             STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
             if [[ $STATE_MACHINE_ARN != "" ]]; then
               aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
