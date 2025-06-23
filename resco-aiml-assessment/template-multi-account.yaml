@@ -24,7 +24,7 @@ Resources:
         BedrockSecurityAssessmentFunction: !GetAtt BedrockSecurityAssessmentFunction.Arn
         SagemakerSecurityAssessmentFunction: !GetAtt SagemakerSecurityAssessmentFunction.Arn
         GenerateConsolidatedReportFunction: !GetAtt GenerateConsolidatedReportFunction.Arn
-        AIMLAssessmentBucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+        AIMLAssessmentBucketName: !Ref AIMLAssessmentBucket
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref BedrockSecurityAssessmentFunction
@@ -35,7 +35,7 @@ Resources:
         - LambdaInvokePolicy:
             FunctionName: !Ref GenerateConsolidatedReportFunction
         - S3CrudPolicy:
-            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+            BucketName: !Ref AIMLAssessmentBucket
 
   IAMPermissionCachingFunction:
     Type: AWS::Serverless::Function
@@ -50,10 +50,10 @@ Resources:
       MemorySize: 1024
       Environment:
         Variables:
-          AIML_ASSESSMENT_BUCKET_NAME: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+          AIML_ASSESSMENT_BUCKET_NAME: !Ref AIMLAssessmentBucket
       Policies:
         - S3CrudPolicy:
-            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+            BucketName: !Ref AIMLAssessmentBucket
         - Statement:
             - Sid: IAMPermissions
               Effect: Allow
@@ -86,10 +86,10 @@ Resources:
       MemorySize: 1024
       Environment:
         Variables:
-          AIML_ASSESSMENT_BUCKET_NAME: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+          AIML_ASSESSMENT_BUCKET_NAME: !Ref AIMLAssessmentBucket
       Policies:
         - S3CrudPolicy:
-            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+            BucketName: !Ref AIMLAssessmentBucket
 
   BedrockSecurityAssessmentFunction:
     Type: AWS::Serverless::Function
@@ -104,10 +104,10 @@ Resources:
       MemorySize: 1024
       Environment:
         Variables:
-          AIML_ASSESSMENT_BUCKET_NAME: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+          AIML_ASSESSMENT_BUCKET_NAME: !Ref AIMLAssessmentBucket
       Policies:
         - S3CrudPolicy:
-            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+            BucketName: !Ref AIMLAssessmentBucket
         - Statement:
             - Sid: IAMPermissions
               Effect: Allow
@@ -177,10 +177,10 @@ Resources:
       MemorySize: 1024
       Environment:
         Variables:
-          AIML_ASSESSMENT_BUCKET_NAME: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+          AIML_ASSESSMENT_BUCKET_NAME: !Ref AIMLAssessmentBucket
       Policies:
         - S3CrudPolicy:
-            BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+            BucketName: !Ref AIMLAssessmentBucket
         - Statement:
             - Sid: IAMPermissions
               Effect: Allow
@@ -250,10 +250,9 @@ Resources:
                 - ec2:DescribeVpcs
               Resource: '*'
 
-  # S3 bucket (only created if BucketName parameter is empty)
+  # S3 bucket (always created for local storage)
   AIMLAssessmentBucket:
     Type: AWS::S3::Bucket
-    Condition: CreateBucket
     DeletionPolicy: Retain
     Properties:
       BucketName: !Sub ${AWS::StackName}-aiml-assessment-bucket-${AWS::AccountId}
@@ -267,7 +266,6 @@ Resources:
 
   AssessmentBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Condition: CreateBucket
     Properties:
       Bucket: !Ref AIMLAssessmentBucket
       PolicyDocument:
@@ -290,4 +288,4 @@ Outputs:
     Value: !Ref AIMLAssessmentStateMachine
   AssessmentBucketName:
     Description: Name of the S3 bucket where assessment reports are stored
-    Value: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
+    Value: !Ref AIMLAssessmentBucket
