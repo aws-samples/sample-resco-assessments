@@ -39,7 +39,7 @@ def parse_csv_content(csv_content: str) -> List[Dict[str, str]]:
     
     return results
 
-def get_assessment_results(execution_id: str) -> Dict[str, Any]:
+def get_assessment_results(execution_id: str, account_id: str = None) -> Dict[str, Any]:
     """
     Download and parse Bedrock and SageMaker assessment CSV files for a given execution
     
@@ -68,6 +68,7 @@ def get_assessment_results(execution_id: str) -> Dict[str, Any]:
 
         assessment_results = {
             'execution_id': execution_id,
+            'account_id': account_id,
             'timestamp': datetime.now().isoformat(),
             'bedrock': {},
             'sagemaker': {}
@@ -93,6 +94,11 @@ def get_assessment_results(execution_id: str) -> Dict[str, Any]:
                 
                 # Parse CSV content
                 parsed_data = parse_csv_content(csv_content)
+                
+                # Add account_id to each row if provided
+                if account_id:
+                    for row in parsed_data:
+                        row['Account_ID'] = account_id
                 
                 # Determine which category this file belongs to based on the path
                 file_name = os.path.basename(s3_key)
@@ -221,6 +227,10 @@ def generate_html_report(assessment_results):
             <thead>
                 <tr>
                     <th>
+                        <div class="header-content">Account ID</div>
+                        <input type="text" class="column-filter" placeholder="Filter Account ID...">
+                    </th>
+                    <th>
                         <div class="header-content">Finding</div>
                         <input type="text" class="column-filter" placeholder="Filter Findings...">
                     </th>
@@ -304,6 +314,7 @@ def generate_html_report(assessment_results):
                     severity_class = f"severity-{finding.get('Severity', '').lower()}"
                     row = f"""
                     <tr>
+                        <td>{finding.get('Account_ID', '')}</td>
                         <td>{finding.get('Finding', '')}</td>
                         <td>{finding.get('Finding_Details', '')}</td>
                         <td>{finding.get('Resolution', '')}</td>
@@ -319,6 +330,7 @@ def generate_html_report(assessment_results):
                     severity_class = f"severity-{finding.get('Severity', '').lower()}"
                     row = f"""
                     <tr>
+                        <td>{finding.get('Account_ID', '')}</td>
                         <td>{finding.get('Finding', '')}</td>
                         <td>{finding.get('Finding_Details', '')}</td>
                         <td>{finding.get('Resolution', '')}</td>
@@ -332,7 +344,7 @@ def generate_html_report(assessment_results):
         if not rows:
             rows.append("""
             <tr>
-                <td colspan="6" style="text-align: center;">No findings to display</td>
+                <td colspan="7" style="text-align: center;">No findings to display</td>
             </tr>
             """)
         return html_template.format(rows='\n'.join(rows))
@@ -361,7 +373,7 @@ def generate_html_report(assessment_results):
 def get_current_utc_date():
     return datetime.utcnow().strftime("%Y/%m/%d")
 
-def write_html_to_s3(html_content: str, s3_bucket: str, execution_id: str) -> Optional[str]:
+def write_html_to_s3(html_content: str, s3_bucket: str, execution_id: str, account_id: str = None) -> Optional[str]:
     """
     Write HTML report to S3
     
@@ -376,9 +388,14 @@ def write_html_to_s3(html_content: str, s3_bucket: str, execution_id: str) -> Op
     try:
         s3_client = boto3.client('s3', config=boto3_config)
         
-        # Generate the S3 key
-        date_string = get_current_utc_date()
-        s3_key = f'{date_string}/{execution_id}/security_assessment.html'
+        # Generate the S3 key with account-based folder structure
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        if account_id:
+            s3_key = f'{account_id}/security_assessment_{timestamp}_{execution_id}.html'
+        else:
+            # Fallback to old structure if no account_id
+            date_string = get_current_utc_date()
+            s3_key = f'{date_string}/{execution_id}/security_assessment.html'
         
         # Upload the HTML file
         s3_client.put_object(
@@ -408,13 +425,15 @@ def lambda_handler(event, context):
     try:
         # Get execution ID from event
         execution_id = event["Execution"]["Name"]
+        # Get account ID from event (passed from Step Functions input)
+        account_id = event.get("accountId", "unknown")
         # Get S3 bucket name from environment variable
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
         if not s3_bucket:
             raise ValueError("AIML_ASSESSMENT_BUCKET_NAME environment variable is required")
         
         # Get assessment results
-        assessment_results = get_assessment_results(execution_id)
+        assessment_results = get_assessment_results(execution_id, account_id)
         if not assessment_results:
             raise ValueError(f"No assessment results found: {execution_id}")
         
@@ -422,7 +441,7 @@ def lambda_handler(event, context):
         html_content = generate_html_report(assessment_results)
         
         # Write HTML report to S3
-        s3_key = write_html_to_s3(html_content, s3_bucket, execution_id)
+        s3_key = write_html_to_s3(html_content, s3_bucket, execution_id, account_id)
         
         if not s3_key:
             raise Exception("Failed to write HTML report to S3")

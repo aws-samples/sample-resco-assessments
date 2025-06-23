@@ -1,7 +1,7 @@
 # ReSCO Assessments
 
 ## Overview
-This monorepo contains a collection of tools and frameworks for performing ReSCO (Resilience, Security, and Cost Optimization) assessments across different types of workloads and infrastructures.
+This monorepo contains a collection of tools and frameworks for performing ReSCO (Resilience, Security, and Cost Optimization) assessments across different types of workloads and infrastructures. It uses AWS serverless services to gather the data from the control plane and provide a list of assessments with the sevrity level and recommended actions.
 
 ReSCO assessments help organizations evaluate and improve their:
 - **Resilience**: System reliability, fault tolerance, and disaster recovery capabilities

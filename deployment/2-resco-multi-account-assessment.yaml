@@ -204,8 +204,10 @@ Resources:
               - 's3:GetObject'
               - 's3:PutObject'
               - 's3:DeleteObject'
+              - 's3:ListBucket'
             Effect: Allow
             Resource:
+              - !Sub '${ReSCOAssessmentBucket.Arn}'
               - !Sub '${ReSCOAssessmentBucket.Arn}/*'
 
   # CodeBuild role for running assessments
@@ -389,6 +391,7 @@ Resources:
 
   CodeBuildStartBuild:
     Type: Custom::CodeBuildStartBuild
+    DependsOn: ReSCOAssessmentBucketPolicy
     Properties:
       ServiceToken: !GetAtt CodeBuildStartBuildLambda.Arn
       ProjectName: !Ref ReSCOCodeBuild
