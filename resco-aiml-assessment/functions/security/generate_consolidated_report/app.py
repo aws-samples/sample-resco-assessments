@@ -423,17 +423,10 @@ def lambda_handler(event, context):
     logger.info(f"Event: {event}")
     
     try:
-        # Get execution ID from context (Step Functions provides this)
-        execution_id = context.aws_request_id if hasattr(context, 'aws_request_id') else 'unknown'
+        # Get execution ID from event
+        execution_id = event["Execution"]["Name"]
         # Get account ID from event (passed from Step Functions input)
         account_id = event.get("accountId", "unknown")
-        
-        # Try to get execution ID from event if available
-        if isinstance(event, dict) and "Execution" in event:
-            execution_id = event["Execution"]["Name"]
-        elif hasattr(context, 'invoked_function_arn'):
-            # Use request ID as fallback
-            execution_id = context.aws_request_id
         # Get S3 bucket name from environment variable
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
         if not s3_bucket:

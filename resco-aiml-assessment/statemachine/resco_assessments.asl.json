@@ -112,7 +112,10 @@
             "QueryLanguage": "JSONata",
             "Arguments": {
                 "FunctionName": "${GenerateConsolidatedReportFunction}",
-                "Payload": "{% $ %}"
+                "Payload": {
+                    "Execution": "{% $states.context.Execution %}",
+                    "accountId": "{% $states.input.accountId %}"
+                }
             }
         }
     }
