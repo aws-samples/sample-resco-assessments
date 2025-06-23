@@ -26,6 +26,10 @@ phases:
           echo "Will scan accounts: $account_list"
           for accountId in $account_list; do
             echo "Processing account $accountId"
+            if [[ $accountId == $AWS_ACCOUNT_ID ]]; then
+              echo "Skipping management account $accountId - will be handled separately"
+              continue
+            fi
             aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment > /tmp/creds.json || continue
             export AWS_ACCESS_KEY_ID=$(cat /tmp/creds.json | jq -r '.Credentials.AccessKeyId')
             export AWS_SECRET_ACCESS_KEY=$(cat /tmp/creds.json | jq -r '.Credentials.SecretAccessKey')
@@ -39,6 +43,12 @@ phases:
             fi
             unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
           done
+          echo "Deploying to management account $AWS_ACCOUNT_ID"
+          sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-mgmt --capabilities CAPABILITY_IAM --no-confirm-changeset --resolve-s3 --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for management account"
+          STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
+          if [[ $STATE_MACHINE_ARN != "" ]]; then
+            aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{}"
+          fi
         else
           echo "Single account deployment"
           sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT
