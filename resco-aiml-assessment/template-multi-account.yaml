@@ -255,7 +255,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     Properties:
-      BucketName: !Sub ${AWS::StackName}-aiml-assessment-bucket-${AWS::AccountId}
+      BucketName: !Sub ${AWS::StackName}-${AWS::AccountId}
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
