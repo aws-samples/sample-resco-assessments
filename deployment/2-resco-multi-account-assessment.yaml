@@ -271,6 +271,11 @@ Resources:
                   - apigateway:*
                   - iam:*
                   - states:*
+                  - s3:CreateBucket
+                  - s3:PutBucketPolicy
+                  - s3:PutBucketVersioning
+                  - s3:PutPublicAccessBlock
+                  - s3:ListBucket
                 Effect: Allow
                 Resource: '*'
 
