@@ -52,9 +52,8 @@ def write_permissions_to_s3(permission_cache, execution_id):
         # Convert to JSON string
         json_data = json.dumps(cache_data, default=str, indent=2)
         
-        # Define the S3 key (filename)
-        date_string = get_current_utc_date()
-        s3_key = f'{date_string}/{execution_id}/permissions_cache.json'
+        # Define the S3 key (filename) - write to bucket root
+        s3_key = f'permissions_cache_{execution_id}.json'
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
 
         # Upload to S3

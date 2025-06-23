@@ -55,17 +55,6 @@ Resources:
         - S3CrudPolicy:
             BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
         - Statement:
-            - Sid: CentralBucketAccess
-              Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:PutObject
-                - s3:DeleteObject
-                - s3:ListBucket
-              Resource:
-                - !Sub 'arn:aws:s3:::*resco*assessment*'
-                - !Sub 'arn:aws:s3:::*resco*assessment*/*'
-        - Statement:
             - Sid: IAMPermissions
               Effect: Allow
               Action:
@@ -101,17 +90,6 @@ Resources:
       Policies:
         - S3CrudPolicy:
             BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
-        - Statement:
-            - Sid: CentralBucketAccess
-              Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:PutObject
-                - s3:DeleteObject
-                - s3:ListBucket
-              Resource:
-                - !Sub 'arn:aws:s3:::*resco*assessment*'
-                - !Sub 'arn:aws:s3:::*resco*assessment*/*'
 
   BedrockSecurityAssessmentFunction:
     Type: AWS::Serverless::Function
@@ -130,17 +108,6 @@ Resources:
       Policies:
         - S3CrudPolicy:
             BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
-        - Statement:
-            - Sid: CentralBucketAccess
-              Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:PutObject
-                - s3:DeleteObject
-                - s3:ListBucket
-              Resource:
-                - !Sub 'arn:aws:s3:::*resco*assessment*'
-                - !Sub 'arn:aws:s3:::*resco*assessment*/*'
         - Statement:
             - Sid: IAMPermissions
               Effect: Allow
@@ -214,17 +181,6 @@ Resources:
       Policies:
         - S3CrudPolicy:
             BucketName: !If [CreateBucket, !Ref AIMLAssessmentBucket, !Ref BucketName]
-        - Statement:
-            - Sid: CentralBucketAccess
-              Effect: Allow
-              Action:
-                - s3:GetObject
-                - s3:PutObject
-                - s3:DeleteObject
-                - s3:ListBucket
-              Resource:
-                - !Sub 'arn:aws:s3:::*resco*assessment*'
-                - !Sub 'arn:aws:s3:::*resco*assessment*/*'
         - Statement:
             - Sid: IAMPermissions
               Effect: Allow

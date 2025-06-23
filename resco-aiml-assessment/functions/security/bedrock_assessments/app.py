@@ -39,7 +39,7 @@ def get_permissions_cache(execution_id: str) -> Optional[Dict[str, Any]]:
     try:
         s3_client = boto3.client('s3', config=boto3_config)
         date_string = get_current_utc_date()
-        s3_key = f'{date_string}/{execution_id}/permissions_cache.json'
+        s3_key = f'permissions_cache_{execution_id}.json'
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
 
         logger.info(f"Retrieving permissions cache from s3://{s3_bucket}/{s3_key}")
@@ -1273,8 +1273,7 @@ def write_to_s3(execution_id, csv_content: str, bucket_name: str) -> str:
     logger.debug(f"Writing CSV report to S3 bucket: {bucket_name}")
     try:
         s3_client = boto3.client('s3', config=boto3_config)
-        date_string = get_current_utc_date()
-        file_name = f'{date_string}/{execution_id}/bedrock_security_report.csv'
+        file_name = f'bedrock_security_report_{execution_id}.csv'
         
         s3_client.put_object(
             Bucket=bucket_name,

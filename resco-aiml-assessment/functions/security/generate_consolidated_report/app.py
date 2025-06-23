@@ -388,14 +388,9 @@ def write_html_to_s3(html_content: str, s3_bucket: str, execution_id: str, accou
     try:
         s3_client = boto3.client('s3', config=boto3_config)
         
-        # Generate the S3 key with account-based folder structure
+        # Generate the S3 key for local bucket (no account folder needed)
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        if account_id:
-            s3_key = f'{account_id}/security_assessment_{timestamp}_{execution_id}.html'
-        else:
-            # Fallback to old structure if no account_id
-            date_string = get_current_utc_date()
-            s3_key = f'{date_string}/{execution_id}/security_assessment.html'
+        s3_key = f'security_assessment_{timestamp}_{execution_id}.html'
         
         # Upload the HTML file
         s3_client.put_object(
