@@ -197,6 +197,16 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: false
+          - Sid: AllowCrossAccountAccess
+            Principal:
+              AWS: 'arn:aws:iam::*:role/service-role/ReSCOAIMLMemberRole'
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+            Effect: Allow
+            Resource:
+              - !Sub '${ReSCOAssessmentBucket.Arn}/*'
 
   # CodeBuild role for running assessments
   ReSCOCodeBuildRole:

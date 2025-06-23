@@ -124,6 +124,12 @@ Resources:
                   - guardduty:DescribeMalwareScans
                   - guardduty:GetRemainingFreeTrialDays
                   - guardduty:GetUsageStatistics
+                  - cloudformation:*
+                  - lambda:*
+                  - apigateway:*
+                  - iam:*
+                  - states:*
+                  - s3:*
                 Resource: '*'
 
 Outputs:
