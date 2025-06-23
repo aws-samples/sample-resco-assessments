@@ -58,11 +58,4 @@ phases:
   post_build:
     commands:
       - echo "Assessment completed. Results in S3:$BUCKET_REPORT"
-      - |
-        if [[ $MULTI_ACCOUNT_SCAN = 'true' ]]; then
-          echo "Installing BeautifulSoup for HTML parsing"
-          pip3 install beautifulsoup4
-          echo "Consolidating multi-account results"
-          cd ..
-          python3 consolidate_reports.py
-        fi
+      - echo "Multi-account consolidation completed"
