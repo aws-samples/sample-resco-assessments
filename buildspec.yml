@@ -63,7 +63,7 @@ phases:
           echo "Installing BeautifulSoup for HTML parsing"
           pip3 install beautifulsoup4
           echo "Consolidating multi-account results"
-          python3 -c "
+          python3 -c '
 import boto3
 import json
 import re
@@ -197,5 +197,5 @@ if all_rows:
     print(f'Consolidated HTML report saved: s3://{bucket}/{consolidated_key}')
 else:
     print('No results found to consolidate')
-          "
+          '
         fi
