@@ -18,7 +18,7 @@ boto3_config = Config(
 
 # Configure logging
 logger = logging.getLogger()
-logger.setLevel(logging.ERROR)
+logger.setLevel(logging.WARNING)
 
 def parse_csv_content(csv_content: str) -> List[Dict[str, str]]:
     """
@@ -53,16 +53,26 @@ def get_assessment_results(execution_id: str, account_id: str = None) -> Dict[st
     try:
         s3_client = boto3.client('s3', config=boto3_config)
         
-        # Define the base path for this execution
-        date_string = get_current_utc_date()
-        base_path = f"{date_string}/{execution_id}"
-        # List all CSV files in the execution directory
+        # List all CSV files with execution ID in filename (bucket root)
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
         response = s3_client.list_objects_v2(
             Bucket=s3_bucket,
-            Prefix=base_path
+            Prefix=f'bedrock_security_report_{execution_id}'
         )
-        if 'Contents' not in response:
+        
+        # Also check for SageMaker reports
+        sagemaker_response = s3_client.list_objects_v2(
+            Bucket=s3_bucket,
+            Prefix=f'sagemaker_security_report_{execution_id}'
+        )
+        
+        # Combine both responses
+        all_objects = []
+        if 'Contents' in response:
+            all_objects.extend(response['Contents'])
+        if 'Contents' in sagemaker_response:
+            all_objects.extend(sagemaker_response['Contents'])
+        if not all_objects:
             logger.warning(f"No assessment files found for execution {execution_id}")
             return {}
 
@@ -75,7 +85,7 @@ def get_assessment_results(execution_id: str, account_id: str = None) -> Dict[st
         }
 
         # Process each CSV file
-        for obj in response['Contents']:
+        for obj in all_objects:
             s3_key = obj['Key']
             
             # Skip if not a CSV file
