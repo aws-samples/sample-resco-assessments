@@ -110,9 +110,9 @@
             ],
             "End": true,
             "QueryLanguage": "JSONata",
-            "Parameters": {
+            "Arguments": {
                 "FunctionName": "${GenerateConsolidatedReportFunction}",
-                "Payload.$": "$"
+                "Payload": "{% $ %}"
             }
         }
     }
