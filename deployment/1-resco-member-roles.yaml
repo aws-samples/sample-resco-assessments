@@ -141,6 +141,11 @@ Resources:
                 Resource:
                   - 'arn:aws:s3:::*resco*assessment*'
                   - 'arn:aws:s3:::*resco*assessment*/*'
+              # Allow Lambda execution roles to access central bucket
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                Resource: 'arn:aws:iam::*:role/resco-aiml-security-*'
 
 Outputs:
   ReSCOMemberRoleArn:

@@ -198,6 +198,7 @@ Resources:
               Bool:
                 aws:SecureTransport: false
 
+
   # CodeBuild role for running assessments
   ReSCOCodeBuildRole:
     Type: AWS::IAM::Role

@@ -114,7 +114,7 @@
                 "FunctionName": "${GenerateConsolidatedReportFunction}",
                 "Payload": {
                     "Execution": "{% $states.context.Execution %}",
-                    "accountId": "{% $states.input.accountId %}"
+                    "accountId": "{% $split($states.context.Execution.RoleArn, ':')[4] %}"
                 }
             }
         }

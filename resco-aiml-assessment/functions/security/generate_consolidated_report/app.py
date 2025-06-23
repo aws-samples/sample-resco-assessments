@@ -420,7 +420,7 @@ def lambda_handler(event, context):
     try:
         # Get execution ID from event
         execution_id = event["Execution"]["Name"]
-        # Get account ID from event (passed from Step Functions input)
+        # Get account ID from event (extracted from execution role ARN)
         account_id = event.get("accountId", "unknown")
         # Get S3 bucket name from environment variable
         s3_bucket = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
