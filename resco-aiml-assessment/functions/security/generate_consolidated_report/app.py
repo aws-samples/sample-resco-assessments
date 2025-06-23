@@ -410,6 +410,39 @@ def write_html_to_s3(html_content: str, s3_bucket: str, execution_id: str, accou
         logger.error(f"Error writing HTML report to S3: {str(e)}", exc_info=True)
         return None
 
+def consolidate_multi_account_reports(central_bucket: str):
+    """
+    Consolidate HTML reports from multiple accounts into a single report
+    """
+    try:
+        from bs4 import BeautifulSoup
+        
+        # This would need to be implemented to download from other account buckets
+        # For now, just create a placeholder consolidated report
+        logger.info("Multi-account consolidation placeholder - would download from other accounts")
+        
+        consolidated_html = '''<!DOCTYPE html>
+<html><head><title>Multi-Account Consolidated Report</title></head>
+<body><h1>Multi-Account Assessment Report</h1>
+<p>Individual account reports have been generated. Manual consolidation required.</p></body></html>'''
+        
+        s3_client = boto3.client('s3')
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        s3_key = f'consolidated_report_{timestamp}.html'
+        
+        s3_client.put_object(
+            Bucket=central_bucket,
+            Key=s3_key,
+            Body=consolidated_html,
+            ContentType='text/html'
+        )
+        
+        logger.info(f"Consolidated report saved: s3://{central_bucket}/{s3_key}")
+        
+    except Exception as e:
+        logger.error(f"Error in consolidation: {str(e)}")
+        raise
+
 def lambda_handler(event, context):
     """
     Main Lambda handler
@@ -440,6 +473,18 @@ def lambda_handler(event, context):
         
         if not s3_key:
             raise Exception("Failed to write HTML report to S3")
+        
+        # Check if this is management account and consolidate multi-account reports
+        try:
+            sts_client = boto3.client('sts')
+            current_account = sts_client.get_caller_identity()['Account']
+            
+            # Simple check: if we're in management account, try consolidation
+            if current_account == account_id:
+                logger.info("Attempting multi-account consolidation")
+                consolidate_multi_account_reports(s3_bucket)
+        except Exception as e:
+            logger.warning(f"Multi-account consolidation failed: {str(e)}")
         
         return {
             'statusCode': 200,
