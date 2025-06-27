@@ -10,10 +10,6 @@ Parameters:
     Type: String
     Description: S3 bucket name for storing assessment results
     Default: ''
-  ManagementAccountId:
-    Type: String
-    Description: Management account ID for cross-account access
-    Default: ''
 
 Conditions:
   CreateBucket: !Equals [!Ref BucketName, '']
@@ -285,19 +281,6 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: false
-          - Sid: AllowManagementAccountAccess
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${ManagementAccountId}:role/resco-aiml-security-mgmt-GenerateConsolidatedRe-*'
-            Action:
-              - s3:GetObject
-              - s3:ListBucket
-            Resource:
-              - !Sub '${AIMLAssessmentBucket.Arn}'
-              - !Sub '${AIMLAssessmentBucket.Arn}/*'
-            Condition:
-              StringEquals:
-                aws:PrincipalTag:aws:cloudformation:stack-name: resco-aiml-security-mgmt
 
 Outputs:
   AIMLAssessmentStateMachineArn:

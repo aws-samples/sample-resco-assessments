@@ -36,18 +36,44 @@ phases:
             export AWS_SESSION_TOKEN=$(cat /tmp/creds.json | jq -r '.Credentials.SessionToken')
             echo "Deploying to account $accountId"
             aws cloudformation delete-stack --stack-name aws-sam-cli-managed-default || echo "No managed stack to delete in $accountId"
-            sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --resolve-s3 --parameter-overrides BucketName=$BUCKET_REPORT ManagementAccountId=$AWS_ACCOUNT_ID --region $AWS_DEFAULT_REGION || echo "Deploy failed for $accountId"
+            sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --resolve-s3 --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for $accountId"
             STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
             if [[ $STATE_MACHINE_ARN != "" ]]; then
-              aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}"
+              EXECUTION_ARN=$(aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}" --query 'executionArn' --output text)
+              echo "Started execution: $EXECUTION_ARN"
+              
+              # Wait for execution to complete
+              echo "Waiting for execution to complete for account $accountId"
+              aws stepfunctions wait execution-succeeded --execution-arn $EXECUTION_ARN || echo "Execution may have failed for $accountId"
+              
+              # Copy files from member account bucket to CodeBuild environment
+              ACCOUNT_BUCKET=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
+              if [[ $ACCOUNT_BUCKET != "" ]]; then
+                echo "Copying files from $ACCOUNT_BUCKET to local storage"
+                mkdir -p /tmp/account-files/$accountId
+                aws s3 cp s3://$ACCOUNT_BUCKET/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" || echo "No files to copy from $accountId"
+              fi
             fi
             unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
           done
           echo "Deploying to management account $AWS_ACCOUNT_ID"
-          sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-mgmt --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT ManagementAccountId=$AWS_ACCOUNT_ID --region $AWS_DEFAULT_REGION || echo "Deploy failed for management account"
+          sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-mgmt --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for management account"
           STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
           if [[ $STATE_MACHINE_ARN != "" ]]; then
-            aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$AWS_ACCOUNT_ID\"}"
+            MGMT_EXECUTION_ARN=$(aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$AWS_ACCOUNT_ID\"}" --query 'executionArn' --output text)
+            echo "Started management account execution: $MGMT_EXECUTION_ARN"
+            
+            # Wait for management account execution to complete
+            echo "Waiting for management account execution to complete"
+            aws stepfunctions wait execution-succeeded --execution-arn $MGMT_EXECUTION_ARN || echo "Management execution may have failed"
+            
+            # Copy management account files to local storage
+            MGMT_BUCKET=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
+            if [[ $MGMT_BUCKET != "" ]]; then
+              echo "Copying management account files to local storage"
+              mkdir -p /tmp/account-files/$AWS_ACCOUNT_ID
+              aws s3 cp s3://$MGMT_BUCKET/ /tmp/account-files/$AWS_ACCOUNT_ID/ --recursive --exclude "*" --include "*.csv" --include "*.html" || echo "No files to copy from management account"
+            fi
           fi
         else
           echo "Single account deployment"
@@ -58,4 +84,88 @@ phases:
   post_build:
     commands:
       - echo "Assessment completed. Results in S3:$BUCKET_REPORT"
-      - echo "Multi-account consolidation completed"
+      - |
+        if [[ $MULTI_ACCOUNT_SCAN = 'true' ]]; then
+          echo "Uploading files to management account S3 bucket and creating consolidated report"
+          pip3 install beautifulsoup4
+          
+          # Upload files from local storage to management account S3 bucket organized by account
+          for accountId in $account_list $AWS_ACCOUNT_ID; do
+            if [[ -d /tmp/account-files/$accountId ]]; then
+              echo "Uploading files for account $accountId"
+              aws s3 cp /tmp/account-files/$accountId/ s3://$BUCKET_REPORT/$accountId/ --recursive || echo "Failed to upload files for $accountId"
+            fi
+          done
+          
+          # Create consolidated HTML report from local files
+          python3 -c "
+import os
+import glob
+from bs4 import BeautifulSoup
+from datetime import datetime
+import boto3
+
+s3 = boto3.client('s3')
+bucket = os.environ['BUCKET_REPORT']
+
+all_rows = []
+for account_dir in glob.glob('/tmp/account-files/*/'):
+    account_id = os.path.basename(account_dir.rstrip('/'))
+    html_files = glob.glob(os.path.join(account_dir, '*.html'))
+    
+    if html_files:
+        # Process the first HTML file found
+        with open(html_files[0], 'r') as f:
+            soup = BeautifulSoup(f.read(), 'html.parser')
+            tbody = soup.find('tbody')
+            if tbody:
+                rows = tbody.find_all('tr')
+                for row in rows:
+                    # Add account ID as first cell
+                    cells = row.find_all('td')
+                    if cells and not cells[0].get_text().strip() == account_id:
+                        account_cell = soup.new_tag('td')
+                        account_cell.string = account_id
+                        row.insert(0, account_cell)
+                    all_rows.append(str(row))
+
+if all_rows:
+    html_template = '''<!DOCTYPE html>
+<html><head><title>Multi-Account ReSCO AI/ML Security Assessment Report</title>
+<style>
+body{{font-family:Arial,sans-serif;margin:20px}}
+table{{border-collapse:collapse;width:100%;margin-top:20px}}
+th,td{{border:1px solid #ddd;padding:8px;text-align:left}}
+th{{background-color:#f2f2f2}}
+tr:nth-child(even){{background-color:#f9f9f9}}
+.severity-high{{color:#d73a4a;font-weight:bold}}
+.severity-medium{{color:#fb8c00;font-weight:bold}}
+.severity-low{{color:#2986cc;font-weight:bold}}
+</style></head>
+<body>
+<h1>Multi-Account ReSCO AI/ML Security Assessment Report</h1>
+<p>Generated: {timestamp}</p>
+<table>
+<thead><tr><th>Account ID</th><th>Finding</th><th>Finding Details</th><th>Resolution</th><th>Reference</th><th>Severity</th><th>Status</th></tr></thead>
+<tbody>{rows}</tbody>
+</table>
+</body></html>'''
+    
+    consolidated_html = html_template.format(
+        timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC'),
+        rows=''.join(all_rows)
+    )
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    s3.put_object(
+        Bucket=bucket,
+        Key=f'consolidated-reports/multi_account_report_{timestamp}.html',
+        Body=consolidated_html,
+        ContentType='text/html'
+    )
+    print(f'Consolidated report saved to s3://{bucket}/consolidated-reports/multi_account_report_{timestamp}.html')
+else:
+    print('No HTML reports found for consolidation')
+          "
+        fi
+      - echo "Assessment and consolidation completed"
