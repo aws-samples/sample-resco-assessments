@@ -422,36 +422,142 @@ def write_html_to_s3(html_content: str, s3_bucket: str, execution_id: str, accou
 
 def consolidate_multi_account_reports(central_bucket: str):
     """
-    Consolidate HTML reports from multiple accounts into a single report
+    Consolidate HTML and CSV reports from multiple accounts
     """
     try:
         from bs4 import BeautifulSoup
-        
-        # This would need to be implemented to download from other account buckets
-        # For now, just create a placeholder consolidated report
-        logger.info("Multi-account consolidation placeholder - would download from other accounts")
-        
-        consolidated_html = '''<!DOCTYPE html>
-<html><head><title>Multi-Account Consolidated Report</title></head>
-<body><h1>Multi-Account Assessment Report</h1>
-<p>Individual account reports have been generated. Manual consolidation required.</p></body></html>'''
+        import boto3
         
         s3_client = boto3.client('s3')
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        s3_key = f'consolidated_report_{timestamp}.html'
+        sts_client = boto3.client('sts')
         
-        s3_client.put_object(
-            Bucket=central_bucket,
-            Key=s3_key,
-            Body=consolidated_html,
-            ContentType='text/html'
-        )
+        # Get list of member accounts from Organizations
+        try:
+            org_client = boto3.client('organizations')
+            accounts = org_client.list_accounts()['Accounts']
+            member_accounts = [acc['Id'] for acc in accounts if acc['Status'] == 'ACTIVE']
+        except Exception as e:
+            logger.warning(f"Could not get organization accounts: {str(e)}")
+            # Fallback to discovering accounts from existing buckets
+            member_accounts = []
         
-        logger.info(f"Consolidated report saved: s3://{central_bucket}/{s3_key}")
+        all_findings = []
         
+        for account_id in member_accounts:
+            try:
+                # Skip management account
+                current_account = sts_client.get_caller_identity()['Account']
+                if account_id == current_account:
+                    continue
+                    
+                logger.info(f"Processing account {account_id}")
+                
+                # Construct member account bucket name
+                member_bucket = f'resco-aiml-security-{account_id}-{account_id}'
+                
+                # List objects in member account bucket
+                try:
+                    response = s3_client.list_objects_v2(Bucket=member_bucket)
+                    if 'Contents' not in response:
+                        continue
+                        
+                    for obj in response['Contents']:
+                        key = obj['Key']
+                        
+                        # Copy file to central bucket under account folder
+                        copy_source = {'Bucket': member_bucket, 'Key': key}
+                        dest_key = f'{account_id}/{key}'
+                        
+                        s3_client.copy_object(
+                            CopySource=copy_source,
+                            Bucket=central_bucket,
+                            Key=dest_key
+                        )
+                        
+                        # If it's a CSV file, parse for consolidation
+                        if key.endswith('.csv'):
+                            csv_obj = s3_client.get_object(Bucket=member_bucket, Key=key)
+                            csv_content = csv_obj['Body'].read().decode('utf-8')
+                            
+                            # Parse CSV and add account ID
+                            csv_file = StringIO(csv_content)
+                            csv_reader = csv.DictReader(csv_file)
+                            for row in csv_reader:
+                                row['Account_ID'] = account_id
+                                all_findings.append(row)
+                                
+                except Exception as e:
+                    logger.warning(f"Could not access bucket {member_bucket}: {str(e)}")
+                    continue
+                    
+            except Exception as e:
+                logger.error(f"Error processing account {account_id}: {str(e)}")
+                continue
+        
+        # Generate consolidated HTML report
+        if all_findings:
+            html_content = generate_consolidated_html(all_findings)
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            consolidated_key = f'consolidated-reports/multi_account_report_{timestamp}.html'
+            
+            s3_client.put_object(
+                Bucket=central_bucket,
+                Key=consolidated_key,
+                Body=html_content,
+                ContentType='text/html'
+            )
+            
+            logger.info(f"Consolidated report saved: s3://{central_bucket}/{consolidated_key}")
+        else:
+            logger.warning("No findings found for consolidation")
+            
     except Exception as e:
         logger.error(f"Error in consolidation: {str(e)}")
         raise
+
+def generate_consolidated_html(findings):
+    """
+    Generate consolidated HTML report from all findings
+    """
+    html_template = '''<!DOCTYPE html>
+<html><head><title>Multi-Account ReSCO AI/ML Security Assessment Report</title>
+<style>
+body{font-family:Arial,sans-serif;margin:20px}
+table{border-collapse:collapse;width:100%;margin-top:20px}
+th,td{border:1px solid #ddd;padding:8px;text-align:left}
+th{background-color:#f2f2f2}
+tr:nth-child(even){background-color:#f9f9f9}
+.severity-high{color:#d73a4a;font-weight:bold}
+.severity-medium{color:#fb8c00;font-weight:bold}
+.severity-low{color:#2986cc;font-weight:bold}
+</style></head>
+<body>
+<h1>Multi-Account ReSCO AI/ML Security Assessment Report</h1>
+<p>Generated: {timestamp}</p>
+<table>
+<thead><tr><th>Account ID</th><th>Finding</th><th>Finding Details</th><th>Resolution</th><th>Reference</th><th>Severity</th><th>Status</th></tr></thead>
+<tbody>{rows}</tbody>
+</table>
+</body></html>'''
+    
+    rows = []
+    for finding in findings:
+        severity_class = f"severity-{finding.get('Severity', '').lower()}"
+        row = f'''<tr>
+<td>{finding.get('Account_ID', '')}</td>
+<td>{finding.get('Finding', '')}</td>
+<td>{finding.get('Finding_Details', '')}</td>
+<td>{finding.get('Resolution', '')}</td>
+<td><a href="{finding.get('Reference', '')}" target="_blank">{finding.get('Reference', '')}</a></td>
+<td class="{severity_class}">{finding.get('Severity', '')}</td>
+<td>{finding.get('Status', '')}</td>
+</tr>'''
+        rows.append(row)
+    
+    return html_template.format(
+        timestamp=datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
+        rows='\n'.join(rows)
+    )
 
 def lambda_handler(event, context):
     """
