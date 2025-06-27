@@ -16,10 +16,12 @@ def consolidate_html_reports():
     # Process HTML files from each account directory
     for account_dir in glob.glob('/tmp/account-files/*/'):
         account_id = os.path.basename(account_dir.rstrip('/'))
-        html_files = glob.glob(os.path.join(account_dir, '*.html'))
+        # Look for HTML files recursively in case they're in subdirectories
+        html_files = glob.glob(os.path.join(account_dir, '**/*.html'), recursive=True)
         
         if html_files:
             print(f"Processing HTML files for account {account_id}")
+            print(f"Found HTML files: {html_files}")
             # Process the first HTML file found
             with open(html_files[0], 'r') as f:
                 soup = BeautifulSoup(f.read(), 'html.parser')
@@ -72,6 +74,11 @@ tr:nth-child(even){{background-color:#f9f9f9}}
         print(f'Consolidated report saved to s3://{bucket}/consolidated-reports/multi_account_report_{timestamp}.html')
     else:
         print('No HTML reports found for consolidation')
+        # Debug: List what files are actually in the directories
+        for account_dir in glob.glob('/tmp/account-files/*/'):
+            account_id = os.path.basename(account_dir.rstrip('/'))
+            all_files = glob.glob(os.path.join(account_dir, '**/*'), recursive=True)
+            print(f"Account {account_id} files: {all_files}")
 
 if __name__ == '__main__':
     consolidate_html_reports()
