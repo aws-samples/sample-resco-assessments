@@ -1311,9 +1311,9 @@ def lambda_handler(event, context):
         bedrock_access_vpc_findings = check_bedrock_access_and_vpc_endpoints(permission_cache)
         all_findings.append(bedrock_access_vpc_findings)
         
-        logger.info("Running stale access check")
-        stale_access_findings = check_stale_bedrock_access(permission_cache)
-        all_findings.append(stale_access_findings)
+        #logger.info("Running stale access check")
+        #stale_access_findings = check_stale_bedrock_access(permission_cache)
+        #all_findings.append(stale_access_findings)
         
         logger.info("Running marketplace subscription access check")
         marketplace_access_findings = check_marketplace_subscription_access(permission_cache)

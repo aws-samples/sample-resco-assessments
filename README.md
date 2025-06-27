@@ -45,7 +45,23 @@ Deploy `1-resco-member-roles.yaml` to all target accounts using CloudFormation S
 - AWS Organizations setup with management account access
 - StackSets service-linked roles configured
 
-#### Deploy StackSet
+#### Option A: AWS Console
+1. Navigate to **CloudFormation** > **StackSets** in the AWS Console
+2. Click **Create StackSet**
+3. Choose **Template is ready** and **Upload a template file**
+4. Upload `1-resco-member-roles.yaml`
+5. Enter StackSet name: `resco-aiml-member-roles`
+6. Set parameters:
+   - `ReSCOAccountID`: Your central security account ID (e.g., 123456789012)
+7. Configure StackSet options:
+   - **Permissions**: Choose service-managed permissions
+   - **Capabilities**: Check "I acknowledge that AWS CloudFormation might create IAM resources with custom names"
+8. Set deployment targets:
+   - **Deploy to**: Organization or Organizational units
+   - **Regions**: Select your target region (e.g., us-east-1)
+9. Review and click **Submit**
+
+#### Option B: AWS CLI
 ```bash
 # Create the StackSet
 aws cloudformation create-stack-set \
@@ -71,6 +87,23 @@ aws cloudformation create-stack-instances \
 
 Deploy `2-resco-multi-account-assessment.yaml` in your central security account.
 
+#### Option A: AWS Console
+1. Navigate to **CloudFormation** > **Stacks** in the AWS Console
+2. Click **Create stack** > **With new resources (standard)**
+3. Choose **Template is ready** and **Upload a template file**
+4. Upload `2-resco-multi-account-assessment.yaml`
+5. Enter Stack name: `resco-aiml-multi-account`
+6. Configure parameters:
+   - `MultiAccountScan`: Select `true` for multi-account scanning
+   - `MultiAccountListOverride`: Leave blank or enter space-delimited account IDs
+   - `EmailAddress`: Enter your email for notifications (optional)
+   - `ConcurrentAccountScans`: Choose Three, Six, or Twelve
+7. Configure stack options (leave defaults)
+8. Review and check:
+   - "I acknowledge that AWS CloudFormation might create IAM resources with custom names"
+9. Click **Submit**
+
+#### Option B: AWS CLI
 ```bash
 aws cloudformation create-stack \
   --stack-name resco-aiml-multi-account \
@@ -136,8 +169,17 @@ aws cloudformation create-stack \
 ## Customization
 
 ### Adding New Accounts
-Update the StackSet to include new organizational units or specific accounts:
 
+#### Option A: AWS Console
+1. Navigate to **CloudFormation** > **StackSets**
+2. Select `resco-aiml-member-roles` StackSet
+3. Click **Add stacks to StackSet**
+4. Choose deployment targets:
+   - **Deploy to accounts**: Enter specific account IDs
+   - **Regions**: Select target regions
+5. Review and click **Submit**
+
+#### Option B: AWS CLI
 ```bash
 aws cloudformation create-stack-instances \
   --stack-set-name resco-aiml-member-roles \
@@ -150,6 +192,59 @@ Edit the member role permissions in `1-resco-member-roles.yaml` to add/remove se
 
 ### Concurrent Scanning
 Adjust `ConcurrentAccountScans` parameter based on your organization size and cost considerations.
+
+## Viewing Assessment Results
+
+### Accessing Results
+
+1. **Find the S3 Bucket Name**:
+   - Navigate to **CloudFormation** > **Stacks** in the AWS Console
+   - Select your `resco-aiml-multi-account` stack
+   - Go to the **Outputs** tab
+   - Copy the S3 bucket name from the `AssessmentBucketName` output
+
+2. **Navigate to S3 Bucket**:
+   - Go to **S3** in the AWS Console
+   - Search for and open your assessment bucket
+
+### Report Structure
+
+#### Consolidated Reports
+- **Location**: `consolidated-reports/` folder
+- **Content**: Multi-account HTML report combining all account assessments
+- **File Format**: `multi_account_report_YYYYMMDD_HHMMSS.html`
+
+#### Individual Account Reports
+- **Location**: Folders named with account IDs (e.g., `123456789012/`)
+- **Content**: Account-specific CSV and HTML files
+- **Files Include**:
+  - `bedrock_security_report_*.csv` - Bedrock assessment data
+  - `sagemaker_security_report_*.csv` - SageMaker assessment data
+  - `security_report_*.html` - Individual account HTML report
+
+### Sample Assessment Report
+
+The consolidated report provides a comprehensive view of security findings across all accounts:
+
+| Account ID | Finding | Finding Details | Resolution | Reference | Severity | Status |
+|------------|---------|-----------------|------------|-----------|----------|--------|
+| 3183XXXX3611 | Bedrock Model Invocation Logging Check | Model invocation logging is not enabled | Enable logging to S3 or CloudWatch for audit tracking | [Model Invocation Logging](https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html) | Medium | Failed |
+| 3183XXXX3611 | Bedrock Guardrails Check | No Guardrails configured | Configure content filters and safety measures | [Bedrock Guardrails](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html) | Medium | Failed |
+| 3183XXXX3611 | Bedrock CloudTrail Logging Check | CloudTrail not configured for Bedrock API calls | Enable CloudTrail logging for audit compliance | [CloudTrail Logging](https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html) | High | Failed |
+| 3183XXXX3611 | SageMaker Model Registry Issue | No model package groups found | Implement model versioning and lifecycle management | [MLOps Guide](https://docs.aws.amazon.com/sagemaker/latest/dg/mlops.html) | Medium | Failed |
+
+### Understanding Results
+
+- **Severity Levels**:
+  - 🔴 **High**: Critical security issues requiring immediate attention
+  - 🟡 **Medium**: Important security improvements recommended
+  - 🔵 **Low**: Minor optimizations suggested
+  - ✅ **N/A**: No issues found or not applicable
+
+- **Status**:
+  - **Failed**: Security issue identified
+  - **Passed**: No issues found
+  - **N/A**: Check not applicable to current configuration
 
 ## Troubleshooting
 
