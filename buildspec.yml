@@ -37,6 +37,12 @@ phases:
             echo "Deploying to account $accountId"
             aws cloudformation delete-stack --stack-name aws-sam-cli-managed-default || echo "No managed stack to delete in $accountId"
             sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --resolve-s3 --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for $accountId"
+            # Clean up account's assessment bucket after deployment
+            ACCOUNT_BUCKET=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
+            if [[ $ACCOUNT_BUCKET != "" ]]; then
+              echo "Cleaning up assessment bucket: $ACCOUNT_BUCKET"
+              aws s3 rm s3://$ACCOUNT_BUCKET/ --recursive || echo "Failed to clean bucket for $accountId"
+            fi
             STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
             if [[ $STATE_MACHINE_ARN != "" ]]; then
               EXECUTION_ARN=$(aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}" --query 'executionArn' --output text)
@@ -46,6 +52,17 @@ phases:
           done
           echo "Deploying to management account $AWS_ACCOUNT_ID"
           sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-mgmt --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for management account"
+          # Clean up management account's assessment bucket after deployment
+          MGMT_BUCKET=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
+          if [[ $MGMT_BUCKET != "" ]]; then
+            echo "Cleaning up management assessment bucket: $MGMT_BUCKET"
+            aws s3 rm s3://$MGMT_BUCKET/ --recursive || echo "Failed to clean management bucket"
+          fi
+          # Clean up account folders in BUCKET_REPORT (keep consolidated-reports)
+          echo "Cleaning up account folders in $BUCKET_REPORT"
+          for cleanupAccountId in $account_list; do
+            aws s3 rm s3://$BUCKET_REPORT/$cleanupAccountId/ --recursive || echo "No folder to clean for $cleanupAccountId"
+          done
           STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
           if [[ $STATE_MACHINE_ARN != "" ]]; then
             MGMT_EXECUTION_ARN=$(aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$AWS_ACCOUNT_ID\"}" --query 'executionArn' --output text)
@@ -75,7 +92,8 @@ phases:
               echo "Processing management account $accountId"
               echo "Copying management account files to local storage"
               mkdir -p /tmp/account-files/$accountId
-              aws s3 cp s3://$BUCKET_REPORT/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" --exclude "consolidated-reports/*" || echo "No files to copy from management account"
+              # Only copy files from root level, exclude all subdirectories
+              aws s3 cp s3://$BUCKET_REPORT/ /tmp/account-files/$accountId/ --exclude "*" --include "*.csv" --include "*.html" --exclude "*/*" || echo "No files to copy from management account"
             else
               echo "Processing member account $accountId"
               aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment > /tmp/creds.json || continue
@@ -99,11 +117,11 @@ phases:
           echo "Uploading files to management account S3 bucket and creating consolidated report"
           pip3 install beautifulsoup4
           
-          # Upload files from local storage to management account bucket organized by account
+          # Upload files from local storage to management account bucket organized by account (overwrite)
           for accountId in $account_list; do
             if [[ -d /tmp/account-files/$accountId ]]; then
-              echo "Uploading files for account $accountId"
-              aws s3 cp /tmp/account-files/$accountId/ s3://$BUCKET_REPORT/$accountId/ --recursive || echo "Failed to upload files for $accountId"
+              echo "Uploading files for account $accountId (overwriting existing)"
+              aws s3 sync /tmp/account-files/$accountId/ s3://$BUCKET_REPORT/$accountId/ --delete || echo "Failed to upload files for $accountId"
             fi
           done
           

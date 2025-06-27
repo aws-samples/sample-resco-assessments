@@ -13,9 +13,12 @@ def consolidate_html_reports():
     
     all_rows = []
     
-    # Process HTML files from each account directory
+    # Process HTML files from each account directory (exclude consolidated-reports)
     for account_dir in glob.glob('/tmp/account-files/*/'):
         account_id = os.path.basename(account_dir.rstrip('/'))
+        # Skip consolidated-reports folder to avoid reading output files
+        if account_id == 'consolidated-reports':
+            continue
         # Look for HTML files recursively in case they're in subdirectories
         html_files = glob.glob(os.path.join(account_dir, '**/*.html'), recursive=True)
         
