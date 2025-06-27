@@ -58,11 +58,7 @@ phases:
             echo "Cleaning up management assessment bucket: $MGMT_BUCKET"
             aws s3 rm s3://$MGMT_BUCKET/ --recursive || echo "Failed to clean management bucket"
           fi
-          # Clean up account folders in BUCKET_REPORT (keep consolidated-reports)
-          echo "Cleaning up account folders in $BUCKET_REPORT"
-          for cleanupAccountId in $account_list; do
-            aws s3 rm s3://$BUCKET_REPORT/$cleanupAccountId/ --recursive || echo "No folder to clean for $cleanupAccountId"
-          done
+          # Note: Account folders will be overwritten during upload with --delete flag
           STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
           if [[ $STATE_MACHINE_ARN != "" ]]; then
             MGMT_EXECUTION_ARN=$(aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$AWS_ACCOUNT_ID\"}" --query 'executionArn' --output text)
