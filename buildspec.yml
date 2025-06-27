@@ -73,12 +73,9 @@ phases:
           for accountId in $account_list; do
             if [[ $accountId == $AWS_ACCOUNT_ID ]]; then
               echo "Processing management account $accountId"
-              MGMT_BUCKET=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
-              if [[ $MGMT_BUCKET != "" ]]; then
-                echo "Copying management account files to local storage"
-                mkdir -p /tmp/account-files/$accountId
-                aws s3 cp s3://$MGMT_BUCKET/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" || echo "No files to copy from management account"
-              fi
+              echo "Copying management account files to local storage"
+              mkdir -p /tmp/account-files/$accountId
+              aws s3 cp s3://$BUCKET_REPORT/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" || echo "No files to copy from management account"
             else
               echo "Processing member account $accountId"
               aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment > /tmp/creds.json || continue
@@ -99,14 +96,11 @@ phases:
           echo "Uploading files to management account S3 bucket and creating consolidated report"
           pip3 install beautifulsoup4
           
-          # Get management account assessment bucket name
-          MGMT_ASSESSMENT_BUCKET=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
-          
-          # Upload files from local storage to management account assessment bucket organized by account
+          # Upload files from local storage to management account bucket organized by account
           for accountId in $account_list; do
             if [[ -d /tmp/account-files/$accountId ]]; then
               echo "Uploading files for account $accountId"
-              aws s3 cp /tmp/account-files/$accountId/ s3://$MGMT_ASSESSMENT_BUCKET/$accountId/ --recursive || echo "Failed to upload files for $accountId"
+              aws s3 cp /tmp/account-files/$accountId/ s3://$BUCKET_REPORT/$accountId/ --recursive || echo "Failed to upload files for $accountId"
             fi
           done
           
