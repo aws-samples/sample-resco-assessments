@@ -75,7 +75,7 @@ phases:
               echo "Processing management account $accountId"
               echo "Copying management account files to local storage"
               mkdir -p /tmp/account-files/$accountId
-              aws s3 cp s3://$BUCKET_REPORT/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" || echo "No files to copy from management account"
+              aws s3 cp s3://$BUCKET_REPORT/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" --exclude "consolidated-reports/*" || echo "No files to copy from management account"
             else
               echo "Processing member account $accountId"
               aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment > /tmp/creds.json || continue
@@ -87,7 +87,10 @@ phases:
               if [[ $ACCOUNT_BUCKET != "" ]]; then
                 echo "Copying files from $ACCOUNT_BUCKET to local storage"
                 mkdir -p /tmp/account-files/$accountId
-                aws s3 cp s3://$ACCOUNT_BUCKET/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" || echo "No files to copy from $accountId"
+                aws s3 cp s3://$ACCOUNT_BUCKET/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" --exclude "*/" || echo "No files to copy from $accountId"
+                # Flatten any nested directories
+                find /tmp/account-files/$accountId -type f \( -name "*.csv" -o -name "*.html" \) -exec mv {} /tmp/account-files/$accountId/ \; 2>/dev/null || true
+                find /tmp/account-files/$accountId -type d -empty -delete 2>/dev/null || true
               fi
               unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
             fi

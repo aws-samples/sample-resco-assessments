@@ -39,39 +39,7 @@ Security Assessments for:
 - Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
 
 ## Installation
-
-1. Clone the repository
-```bash
-git clone https://github.com/aws-samples/sample-resco-assessments.git
-cd sample-resco-assessments/resco-aiml-assessment
-```
-
-2. Build the SAM application
-```bash
-sam build
-```
-
-3. Deploy the stack
-```bash
-sam deploy --guided
-```
-
-During the guided deployment, you'll be prompted for the following parameters:
-- Stack Name (e.g., resco-aiml-assessment)
-- AWS Region
-- Confirm changes before deploy
-- Allow SAM CLI IAM role creation
-- S3 bucket name for assessment reports
-
-
-## Usage
-
-### Running Assessments
-1. Navigate to Step Functions console
-2. Select the state machine starting with name AIMLAssessmentStateMachine
-3. Click "Start Execution"
-4. Navigate to Amazon S3 bucket starting with name resco-aiml-assessment. This bucket will contain the reaso assessment results.
-
+Please refer to the [main repository README.md](../README.md) for complete installation and deployment instructions.
 
 ## Project Structure
 ```
@@ -83,10 +51,6 @@ resco-aiml-assessment/
 │       ├── sagemaker/            # SageMaker assessment functions
 └── statemachine/                 # Contains the state machine definition
 ```
-
-### Local Testing
-
-Making report file: sam local invoke GenerateConsolidatedReportFunction --env-vars envvars.json -e testfile.json | 2>&1
 
 ## Step Functions Workflow
 ![Step Functions Workflow](images/StepFunctionsFlow.png)
