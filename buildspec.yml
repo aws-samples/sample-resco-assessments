@@ -71,28 +71,30 @@ phases:
           
           echo "Copying files from respective account S3 buckets to CodeBuild environment"
           for accountId in $account_list; do
+            echo "Processing account $accountId"
             if [[ $accountId == $AWS_ACCOUNT_ID ]]; then
-              echo "Processing management account $accountId"
-              echo "Copying management account files to local storage"
-              mkdir -p /tmp/account-files/$accountId
-              # Only copy files from root level, exclude all subdirectories
-              aws s3 cp s3://$BUCKET_REPORT/ /tmp/account-files/$accountId/ --exclude "*" --include "*.csv" --include "*.html" --exclude "*/*" || echo "No files to copy from management account"
+              # Management account - use mgmt stack name
+              STACK_NAME="resco-aiml-security-mgmt"
             else
-              echo "Processing member account $accountId"
+              # Member account - assume role and use account-specific stack name
               aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment > /tmp/creds.json || continue
               export AWS_ACCESS_KEY_ID=$(cat /tmp/creds.json | jq -r '.Credentials.AccessKeyId')
               export AWS_SECRET_ACCESS_KEY=$(cat /tmp/creds.json | jq -r '.Credentials.SecretAccessKey')
               export AWS_SESSION_TOKEN=$(cat /tmp/creds.json | jq -r '.Credentials.SessionToken')
-              
-              ACCOUNT_BUCKET=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
-              if [[ $ACCOUNT_BUCKET != "" ]]; then
-                echo "Copying files from $ACCOUNT_BUCKET to local storage"
-                mkdir -p /tmp/account-files/$accountId
-                aws s3 cp s3://$ACCOUNT_BUCKET/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" --exclude "*/" || echo "No files to copy from $accountId"
-                # Flatten any nested directories
-                find /tmp/account-files/$accountId -type f \( -name "*.csv" -o -name "*.html" \) -exec mv {} /tmp/account-files/$accountId/ \; 2>/dev/null || true
-                find /tmp/account-files/$accountId -type d -empty -delete 2>/dev/null || true
-              fi
+              STACK_NAME="resco-aiml-security-$accountId"
+            fi
+            
+            ACCOUNT_BUCKET=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
+            if [[ $ACCOUNT_BUCKET != "" ]]; then
+              echo "Copying files from $ACCOUNT_BUCKET to local storage"
+              mkdir -p /tmp/account-files/$accountId
+              aws s3 cp s3://$ACCOUNT_BUCKET/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" --exclude "*/" || echo "No files to copy from $accountId"
+              # Flatten any nested directories
+              find /tmp/account-files/$accountId -type f \( -name "*.csv" -o -name "*.html" \) -exec mv {} /tmp/account-files/$accountId/ \; 2>/dev/null || true
+              find /tmp/account-files/$accountId -type d -empty -delete 2>/dev/null || true
+            fi
+            
+            if [[ $accountId != $AWS_ACCOUNT_ID ]]; then
               unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
             fi
           done
@@ -104,7 +106,7 @@ phases:
           for accountId in $account_list; do
             if [[ -d /tmp/account-files/$accountId ]]; then
               echo "Uploading files for account $accountId (overwriting existing)"
-              aws s3 sync /tmp/account-files/$accountId/ s3://$BUCKET_REPORT/$accountId/ --delete || echo "Failed to upload files for $accountId"
+              aws s3 sync /tmp/account-files/$accountId/ s3://$BUCKET_REPORT/$accountId/ || echo "Failed to upload files for $accountId"
             fi
           done
           

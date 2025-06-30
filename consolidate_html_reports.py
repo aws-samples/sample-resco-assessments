@@ -19,12 +19,12 @@ def consolidate_html_reports():
         # Skip consolidated-reports folder to avoid reading output files
         if account_id == 'consolidated-reports':
             continue
-        # Look for HTML files recursively in case they're in subdirectories
-        html_files = glob.glob(os.path.join(account_dir, '**/*.html'), recursive=True)
+        # Look for security assessment HTML files only (exclude consolidated reports)
+        html_files = glob.glob(os.path.join(account_dir, '**/security_assessment_*.html'), recursive=True)
         
         if html_files:
             print(f"Processing HTML files for account {account_id}")
-            print(f"Found HTML files: {html_files}")
+            print(f"Found security assessment HTML files: {html_files}")
             # Process the first HTML file found
             with open(html_files[0], 'r') as f:
                 soup = BeautifulSoup(f.read(), 'html.parser')
