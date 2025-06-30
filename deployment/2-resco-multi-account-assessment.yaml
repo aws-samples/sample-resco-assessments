@@ -17,12 +17,18 @@ Metadata:
           - CodeBuildTimeout
           - ReSCORole
           - GitHubRepoUrl
+          - GitHubBranch
 
 Parameters:
   GitHubRepoUrl:
     Type: String
     Description: GitHub repository URL
     Default: https://github.com/aws-samples/sample-resco-assessments
+  
+  GitHubBranch:
+    Type: String
+    Description: GitHub branch to build from
+    Default: main
   
   ReSCORole:
     Description: 'The role that ReSCO should assume to perform the assessment.'
@@ -307,6 +313,9 @@ Resources:
           - Name: GITHUB_REPO_URL
             Value: !Ref GitHubRepoUrl
             Type: PLAINTEXT
+          - Name: GITHUB_BRANCH
+            Value: !Ref GitHubBranch
+            Type: PLAINTEXT
           - Name: RESCO_ROLE
             Value: !Ref ReSCORole
             Type: PLAINTEXT
@@ -333,6 +342,8 @@ Resources:
       Source:
         Type: GITHUB
         Location: !Ref GitHubRepoUrl
+        GitCloneDepth: 1
+        SourceVersion: !Ref GitHubBranch
 
   # Lambda function to start CodeBuild
   CodeBuildStartBuildLambdaRole:
