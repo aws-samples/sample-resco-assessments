@@ -94,10 +94,18 @@ phases:
             if [[ $ACCOUNT_BUCKET != "" ]]; then
               echo "Copying files from $ACCOUNT_BUCKET to local storage"
               mkdir -p /tmp/account-files/$accountId
+              # List bucket contents first for debugging
+              echo "Bucket contents for $accountId:"
+              aws s3 ls s3://$ACCOUNT_BUCKET/ || echo "Failed to list bucket contents"
               aws s3 cp s3://$ACCOUNT_BUCKET/ /tmp/account-files/$accountId/ --recursive --exclude "*" --include "*.csv" --include "*.html" --exclude "*/" || echo "No files to copy from $accountId"
+              # Show what was actually copied
+              echo "Files copied for $accountId:"
+              ls -la /tmp/account-files/$accountId/ || echo "No files in directory"
               # Flatten any nested directories
               find /tmp/account-files/$accountId -type f \( -name "*.csv" -o -name "*.html" \) -exec mv {} /tmp/account-files/$accountId/ \; 2>/dev/null || true
               find /tmp/account-files/$accountId -type d -empty -delete 2>/dev/null || true
+            else
+              echo "No assessment bucket found for $accountId (STACK_NAME: $STACK_NAME)"
             fi
             
             if [[ $accountId != $AWS_ACCOUNT_ID ]]; then
