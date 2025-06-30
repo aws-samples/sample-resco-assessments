@@ -68,6 +68,12 @@ phases:
           else
             account_list=$(aws organizations list-accounts --query 'Accounts[?Status==`ACTIVE`].Id' --output text)
           fi
+          echo "Account list for post-build processing: $account_list"
+          
+          # Clean up any existing account-files directory to ensure fresh start
+          echo "Cleaning up existing account-files directory"
+          rm -rf /tmp/account-files
+          mkdir -p /tmp/account-files
           
           echo "Copying files from respective account S3 buckets to CodeBuild environment"
           for accountId in $account_list; do
@@ -102,11 +108,17 @@ phases:
           echo "Uploading files to management account S3 bucket and creating consolidated report"
           pip3 install beautifulsoup4
           
+          # Debug: Show which directories exist
+          echo "Available account directories:"
+          ls -la /tmp/account-files/ || echo "No account-files directory"
+          
           # Upload files from local storage to management account bucket organized by account (overwrite)
           for accountId in $account_list; do
             if [[ -d /tmp/account-files/$accountId ]]; then
               echo "Uploading files for account $accountId (overwriting existing)"
               aws s3 sync /tmp/account-files/$accountId/ s3://$BUCKET_REPORT/$accountId/ || echo "Failed to upload files for $accountId"
+            else
+              echo "No directory found for account $accountId"
             fi
           done
           

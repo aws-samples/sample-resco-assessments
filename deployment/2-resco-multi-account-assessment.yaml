@@ -339,11 +339,11 @@ Resources:
       TimeoutInMinutes: !Ref CodeBuildTimeout
       Artifacts:
         Type: NO_ARTIFACTS
+      SourceVersion: !Ref GitHubBranch
       Source:
         Type: GITHUB
         Location: !Ref GitHubRepoUrl
         GitCloneDepth: 1
-        SourceVersion: !Ref GitHubBranch
 
   # Lambda function to start CodeBuild
   CodeBuildStartBuildLambdaRole:
