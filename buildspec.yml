@@ -90,6 +90,28 @@ phases:
               STACK_NAME="resco-aiml-security-$accountId"
             fi
             
+            # Wait for Step Function to complete before copying files
+            STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
+            if [[ $STATE_MACHINE_ARN != "" ]]; then
+              echo "Waiting for Step Function completion in account $accountId..."
+              EXECUTION_ARN=$(aws stepfunctions list-executions --state-machine-arn $STATE_MACHINE_ARN --status-filter RUNNING --max-items 1 --query 'executions[0].executionArn' --output text 2>/dev/null)
+              if [[ $EXECUTION_ARN != "" && $EXECUTION_ARN != "None" ]]; then
+                timeout=300
+                elapsed=0
+                while [[ $elapsed -lt $timeout ]]; do
+                  STATUS=$(aws stepfunctions describe-execution --execution-arn $EXECUTION_ARN --query 'status' --output text 2>/dev/null)
+                  if [[ $STATUS == "SUCCEEDED" || $STATUS == "FAILED" || $STATUS == "TIMED_OUT" || $STATUS == "ABORTED" ]]; then
+                    echo "Step Function for account $accountId completed with status: $STATUS"
+                    break
+                  fi
+                  echo "Step Function for account $accountId still running... waiting 30 seconds"
+                  sleep 30
+                  elapsed=$((elapsed + 30))
+                done
+              fi
+            fi
+            
+            # Now copy files from the completed assessment
             ACCOUNT_BUCKET=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
             if [[ $ACCOUNT_BUCKET != "" ]]; then
               echo "Copying files from $ACCOUNT_BUCKET to local storage"

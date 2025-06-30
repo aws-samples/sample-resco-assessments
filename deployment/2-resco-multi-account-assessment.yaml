@@ -242,6 +242,13 @@ Resources:
                   - s3:GetObject
                 Effect: Allow
                 Resource: !Sub '${ReSCOAssessmentBucket.Arn}/*'
+              - Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Effect: Allow
+                Resource: 
+                  - !Sub 'arn:${AWS::Partition}:s3:::resco-aiml-security-mgmt-${AWS::AccountId}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::resco-aiml-security-mgmt-${AWS::AccountId}/*'
         - PolicyName: AssumeRole
           PolicyDocument:
             Version: '2012-10-17'
