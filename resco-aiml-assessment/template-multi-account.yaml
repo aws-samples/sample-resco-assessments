@@ -20,12 +20,15 @@ Resources:
     Properties:
       DefinitionUri: statemachine/resco_assessments.asl.json
       DefinitionSubstitutions:
+        CleanupBucketFunction: !GetAtt CleanupBucketFunction.Arn
         IAMPermissionCachingFunction: !GetAtt IAMPermissionCachingFunction.Arn
         BedrockSecurityAssessmentFunction: !GetAtt BedrockSecurityAssessmentFunction.Arn
         SagemakerSecurityAssessmentFunction: !GetAtt SagemakerSecurityAssessmentFunction.Arn
         GenerateConsolidatedReportFunction: !GetAtt GenerateConsolidatedReportFunction.Arn
         AIMLAssessmentBucketName: !Ref AIMLAssessmentBucket
       Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CleanupBucketFunction
         - LambdaInvokePolicy:
             FunctionName: !Ref BedrockSecurityAssessmentFunction
         - LambdaInvokePolicy:
@@ -34,6 +37,24 @@ Resources:
             FunctionName: !Ref SagemakerSecurityAssessmentFunction
         - LambdaInvokePolicy:
             FunctionName: !Ref GenerateConsolidatedReportFunction
+        - S3CrudPolicy:
+            BucketName: !Ref AIMLAssessmentBucket
+
+  CleanupBucketFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CleanupBucketFunction
+      CodeUri: functions/security/cleanup_bucket/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          AIML_ASSESSMENT_BUCKET_NAME: !Ref AIMLAssessmentBucket
+      Policies:
         - S3CrudPolicy:
             BucketName: !Ref AIMLAssessmentBucket
 

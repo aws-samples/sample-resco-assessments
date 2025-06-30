@@ -1,7 +1,31 @@
 {
     "Comment": "A state machine that performs ReSCO assessments.",
-    "StartAt": "IAM Permission Caching",
+    "StartAt": "Cleanup S3 Bucket",
     "States": {
+        "Cleanup S3 Bucket": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                }
+            ],
+            "Next": "IAM Permission Caching",
+            "QueryLanguage": "JSONata",
+            "Arguments": {
+                "FunctionName": "${CleanupBucketFunction}",
+                "Payload": "{% $states.context %}"
+            }
+        },
         "IAM Permission Caching": {
             "Type": "Task",
             "Resource": "arn:aws:states:::lambda:invoke",
