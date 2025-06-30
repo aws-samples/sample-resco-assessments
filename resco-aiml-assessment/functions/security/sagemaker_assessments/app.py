@@ -1271,8 +1271,8 @@ def cleanup_old_reports(bucket_name: str):
         if 'Contents' in response:
             objects_to_delete = []
             for obj in response['Contents']:
-                # Delete CSV, HTML and JSON files
-                if obj['Key'].endswith(('.csv', '.html', '.json')):
+                # Delete CSV and HTML files (keep JSON permissions cache)
+                if obj['Key'].endswith(('.csv', '.html')):
                     objects_to_delete.append({'Key': obj['Key']})
             
             if objects_to_delete:
@@ -1307,6 +1307,10 @@ def lambda_handler(event, context):
         logger.info("Initializing IAM permission cache")
         execution_id = event["Execution"]["Name"]
         permission_cache = get_permissions_cache(execution_id)
+        
+        if not permission_cache:
+            logger.error("Permission cache not found - IAM permission caching may have failed")
+            permission_cache = {"role_permissions": {}, "user_permissions": {}}
                 
         logger.info("Running SageMaker internet access check")
         sagemaker_internet_access_findings = check_sagemaker_internet_access()
