@@ -1289,6 +1289,39 @@ def write_to_s3(execution_id, csv_content: str, bucket_name: str) -> str:
         logger.error(f"Error writing to S3: {str(e)}", exc_info=True)
         raise
 
+def cleanup_old_reports(bucket_name: str):
+    """
+    Clean up old assessment reports from S3 bucket
+    """
+    logger.info(f"Cleaning up old reports from bucket: {bucket_name}")
+    try:
+        s3_client = boto3.client('s3', config=boto3_config)
+        
+        # List all objects in the bucket
+        response = s3_client.list_objects_v2(Bucket=bucket_name)
+        
+        if 'Contents' in response:
+            objects_to_delete = []
+            for obj in response['Contents']:
+                # Delete CSV, HTML and JSON files
+                if obj['Key'].endswith(('.csv', '.html', '.json')):
+                    objects_to_delete.append({'Key': obj['Key']})
+            
+            if objects_to_delete:
+                s3_client.delete_objects(
+                    Bucket=bucket_name,
+                    Delete={'Objects': objects_to_delete}
+                )
+                logger.info(f"Deleted {len(objects_to_delete)} old report files")
+            else:
+                logger.info("No old report files to delete")
+        else:
+            logger.info("No objects found in bucket")
+            
+    except Exception as e:
+        logger.warning(f"Error cleaning up old reports: {str(e)}")
+        # Don't fail the entire assessment if cleanup fails
+
 def lambda_handler(event, context):
     """
     Main Lambda handler
@@ -1297,6 +1330,11 @@ def lambda_handler(event, context):
     all_findings = []
     
     try:
+        # Clean up old reports first
+        bucket_name = os.environ.get('AIML_ASSESSMENT_BUCKET_NAME')
+        if bucket_name:
+            cleanup_old_reports(bucket_name)
+        
         # Initialize permission cache
         logger.info("Initializing IAM permission cache")
         execution_id = event["Execution"]["Name"]

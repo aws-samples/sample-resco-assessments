@@ -37,12 +37,6 @@ phases:
             echo "Deploying to account $accountId"
             aws cloudformation delete-stack --stack-name aws-sam-cli-managed-default || echo "No managed stack to delete in $accountId"
             sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-$accountId --capabilities CAPABILITY_IAM --no-confirm-changeset --resolve-s3 --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for $accountId"
-            # Clean up account's assessment bucket after deployment
-            ACCOUNT_BUCKET=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
-            if [[ $ACCOUNT_BUCKET != "" ]]; then
-              echo "Cleaning up assessment bucket: $ACCOUNT_BUCKET"
-              aws s3 rm s3://$ACCOUNT_BUCKET/ --recursive || echo "Failed to clean bucket for $accountId"
-            fi
             STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
             if [[ $STATE_MACHINE_ARN != "" ]]; then
               EXECUTION_ARN=$(aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}" --query 'executionArn' --output text)
@@ -52,13 +46,6 @@ phases:
           done
           echo "Deploying to management account $AWS_ACCOUNT_ID"
           sam deploy --template-file .aws-sam/build/template.yaml --stack-name resco-aiml-security-mgmt --capabilities CAPABILITY_IAM --no-confirm-changeset --s3-bucket $BUCKET_REPORT --parameter-overrides BucketName=$BUCKET_REPORT --region $AWS_DEFAULT_REGION || echo "Deploy failed for management account"
-          # Clean up management account's assessment bucket after deployment
-          MGMT_BUCKET=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AssessmentBucketName`].OutputValue' --output text 2>/dev/null)
-          if [[ $MGMT_BUCKET != "" ]]; then
-            echo "Cleaning up management assessment bucket: $MGMT_BUCKET"
-            aws s3 rm s3://$MGMT_BUCKET/ --recursive || echo "Failed to clean management bucket"
-          fi
-          # Note: Account folders will be overwritten during upload with --delete flag
           STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-security-mgmt --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
           if [[ $STATE_MACHINE_ARN != "" ]]; then
             MGMT_EXECUTION_ARN=$(aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$AWS_ACCOUNT_ID\"}" --query 'executionArn' --output text)
