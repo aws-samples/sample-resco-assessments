@@ -153,7 +153,7 @@ def check_marketplace_subscription_access(permission_cache) -> Dict[str, Any]:
                         finding_details=f"{identity['type'].capitalize()} '{identity['name']}' has overly permissive marketplace subscription access through policy '{identity['policy']}'",
                         resolution="Ensure that users have access to only the models that you want user to be able to subscribe to based on your organizational policies. For example, you may want users to have access to only text based models and not image and video generation model. This can also help to keep cost in check.",
                         reference="https://docs.aws.amazon.com/bedrock/latest/userguide/security-iam-awsmanpol.html#security-iam-awsmanpol-bedrock-marketplace",
-                        severity='Medium',
+                        severity='High',
                         status='Failed'
                     )
             )
@@ -651,8 +651,8 @@ def check_bedrock_access_and_vpc_endpoints(permission_cache) -> Dict[str, Any]:
                         finding_details=finding_detail,
                         resolution='Create a VPC endpoint in your VPC with any of the following Bedrock service endpoints that your application may be using:\n- com.amazonaws.region.bedrock\n- com.amazonaws.region.bedrock-runtime\n- com.amazonaws.region.bedrock-agent\n- com.amazonaws.region.bedrock-agent-runtime',
                         reference='https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html',
-                        severity='Medium',
-                        status='Failed'
+                        severity='Informational',
+                        status='N/A'
                     )
                     )
             else:
@@ -1035,8 +1035,8 @@ def check_bedrock_prompt_management() -> Dict[str, Any]:
                             finding_details=f"Found {len(prompts_without_variants)} prompts without multiple variants. Testing different prompt variants helps optimize responses.",
                             resolution="Create and test multiple variants for your prompts to find the most effective configurations.",
                             reference="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-management.html",
-                            severity='N/A',
-                            status='N/A'
+                            severity='Low',
+                            status='Failed'
                         )
                     )
             else:
@@ -1052,7 +1052,7 @@ def check_bedrock_prompt_management() -> Dict[str, Any]:
                                  "3. Share prompts across your organization\n" +
                                  "4. Maintain consistent prompt templates",
                         reference="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-management.html",
-                        severity='N/A',
+                        severity='Informational',
                         status='N/A'
                     )
                 )
