@@ -88,7 +88,7 @@ resco-assessments/
 }
 ```
 
-## Assessment Module Structure (One Lambda per Service)
+## Assessment Module Structure 
 
 ### 1. AI/ML Assessment (`resco-aiml-assessment/`)
 - **Bedrock Assessment Lambda**: Guardrails, Logging, VPC Endpoints, IAM Roles
@@ -97,22 +97,13 @@ resco-assessments/
 - **Textract Assessment Lambda**: Document processing security (Future)
 
 ### 2. Security Assessment (`resco-security-assessment/`)
-- **EC2 Security Lambda**: Security Groups, Key Management, Patching
-- **RDS Security Lambda**: Encryption, Network Isolation, Access Control
-- **Lambda Security Lambda**: Runtime Security, Environment Variables
-- **VPC Security Lambda**: Network ACLs, Flow Logs, Endpoints
+- **Planned**
 
 ### 3. Resilience Assessment (`resco-resilience-assessment/`)
-- **Backup Assessment Lambda**: AWS Backup, Cross-Region Replication
-- **High Availability Lambda**: Multi-AZ, Auto Scaling, Load Balancing
-- **Disaster Recovery Lambda**: RTO/RPO Analysis, Failover Testing
-- **Fault Tolerance Lambda**: Circuit Breakers, Retry Logic
+- **Planned**
 
 ### 4. Cost Assessment (`resco-cost-assessment/`)
-- **Resource Utilization Lambda**: CloudWatch Metrics, Right-sizing
-- **Cost Optimization Lambda**: Reserved Instances, Spot Instances
-- **Waste Detection Lambda**: Unused Resources, Over-provisioning
-- **Right-sizing Lambda**: Instance optimization recommendations
+- **Planned**
 
 ## Adding New Assessment Services
 
