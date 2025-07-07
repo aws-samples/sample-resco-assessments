@@ -8,7 +8,7 @@ ReSCO assessments help organizations evaluate and improve their:
 - **Security**: Security posture, compliance, and risk management
 - **Cost Optimization**: Resource utilization, cost efficiency, and optimization opportunities
 
-## Assessment Modules (One Lambda per Service)
+## Assessment Modules 
 
 | Module | Description | Lambda Functions | Status |
 |--------|-------------|------------------|--------|
@@ -31,7 +31,8 @@ cd resco-assessments/deployment
 ```
 You will see 1-resco-member-roles.yaml and 2-resco-multi-account-assessment.yaml file in the deployment folder. 
 
-For single account deployment, proceed to Deployment Step #2 and choose Single Account Mode.
+For single account deployment, skip to [Step 2: Deploy Central Infrastructure](#step-2-deploy-central-infrastructure) and choose Single Account Mode.
+For multi account deployment, proceed with all the below steps.
 
 The deployment follows a two-phase approach:
 
