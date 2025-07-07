@@ -85,7 +85,7 @@ Deploy `2-resco-multi-account-assessment.yaml` in your central management accoun
 
 #### AWS Console Deployment
 1. Navigate to **CloudFormation** > **Stacks**
-2. Create stack with `2-resco-multi-account-assessment.yaml`
+2. Create stack with `2-resco-multi-account-assessment.yaml` with name as `resco-aiml-multi-account`
 3. Configure assessment module parameters
 4. Stack creation automatically triggers CodeBuild
 
@@ -205,17 +205,22 @@ Adjust `ConcurrentAccountScans` parameter based on your organization size and co
 
 ## Viewing Assessment Results
 
+You can check CodeBuild service to ensure that the assessmnt run has completed successfullybefore accessing the assesment results.
+
 ### Accessing Results
 
 1. **Find the S3 Bucket Name**:
    - Navigate to **CloudFormation** > **Stacks** in the AWS Console
-   - Select your `resco-aiml-multi-account` stack
+   - For single account, select the `resco-aiml-security` stack
+   - For multi account, select the `resco-aiml-multi-account` stack created in [Step 2: Deploy Central Infrastructure](#step-2-deploy-central-infrastructure)
    - Go to the **Outputs** tab
    - Copy the S3 bucket name from the `AssessmentBucketName` output
 
 2. **Navigate to S3 Bucket**:
    - Go to **S3** in the AWS Console
    - Search for and open your assessment bucket
+   - For single account, open security_assessment_XXXXX.html report
+   - For multi-account, follow below [Report Structure](#report-structure) guidance
 
 ### Report Structure
 
