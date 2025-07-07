@@ -1,0 +1,189 @@
+version: 0.2
+# ReSCO Modular Assessment Buildspec Example
+# This shows how to configure selective deployment of assessment modules
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      - pip install --upgrade pip
+      - pip install --upgrade aws-sam-cli
+
+  build:
+    commands:
+      - echo "Starting ReSCO Modular Assessment"
+      - echo "Multi-account scan is $MULTI_ACCOUNT_SCAN"
+      
+      # Assessment module configuration
+      - export DEPLOY_AIML_ASSESSMENT=${DEPLOY_AIML_ASSESSMENT:-true}
+      - export DEPLOY_SECURITY_ASSESSMENT=${DEPLOY_SECURITY_ASSESSMENT:-false}
+      - export DEPLOY_RESILIENCE_ASSESSMENT=${DEPLOY_RESILIENCE_ASSESSMENT:-false}
+      - export DEPLOY_COST_ASSESSMENT=${DEPLOY_COST_ASSESSMENT:-false}
+      
+      - echo "Assessment modules to deploy:"
+      - echo "  AI/ML: $DEPLOY_AIML_ASSESSMENT"
+      - echo "  Security: $DEPLOY_SECURITY_ASSESSMENT"
+      - echo "  Resilience: $DEPLOY_RESILIENCE_ASSESSMENT"
+      - echo "  Cost: $DEPLOY_COST_ASSESSMENT"
+      
+      # Get account list for multi-account deployment
+      - |-
+        if [[ $MULTI_ACCOUNT_SCAN = 'true' ]]; then
+          echo "Getting list of accounts to scan"
+          if [[ $MULTI_ACCOUNT_LIST_OVERRIDE != '' ]]; then
+            account_list=$MULTI_ACCOUNT_LIST_OVERRIDE
+          else
+            account_list=$(aws organizations list-accounts --query 'Accounts[?Status==`ACTIVE`].Id' --output text)
+          fi
+          echo "Will scan accounts: $account_list"
+          
+          # Deploy to each member account
+          for accountId in $account_list; do
+            echo "Processing account $accountId"
+            if [[ $accountId == $AWS_ACCOUNT_ID ]]; then
+              echo "Skipping management account $accountId - will be handled separately"
+              continue
+            fi
+            
+            # Assume role in target account
+            aws sts assume-role --role-arn arn:$AWS_PARTITION:iam::$accountId:role/service-role/$RESCO_ROLE --role-session-name ReSCOAssessment > /tmp/creds.json || continue
+            export AWS_ACCESS_KEY_ID=$(cat /tmp/creds.json | jq -r '.Credentials.AccessKeyId')
+            export AWS_SECRET_ACCESS_KEY=$(cat /tmp/creds.json | jq -r '.Credentials.SecretAccessKey')
+            export AWS_SESSION_TOKEN=$(cat /tmp/creds.json | jq -r '.Credentials.SessionToken')
+            
+            echo "Deploying assessment modules to account $accountId"
+            
+            # Deploy AI/ML Assessment
+            if [[ $DEPLOY_AIML_ASSESSMENT = 'true' ]]; then
+              echo "Deploying AI/ML Assessment to $accountId"
+              cd resco-aiml-assessment
+              sam build --use-container --template template.yaml
+              sam deploy --template-file .aws-sam/build/template.yaml \
+                --stack-name resco-aiml-$accountId \
+                --capabilities CAPABILITY_IAM \
+                --no-confirm-changeset \
+                --resolve-s3 \
+                --parameter-overrides BucketName=$BUCKET_REPORT \
+                --region $AWS_DEFAULT_REGION || echo "AI/ML deploy failed for $accountId"
+              
+              # Start AI/ML assessment
+              STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-aiml-$accountId --query 'Stacks[0].Outputs[?OutputKey==`AIMLAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
+              if [[ $STATE_MACHINE_ARN != "" ]]; then
+                aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}" --query 'executionArn' --output text
+                echo "Started AI/ML assessment for $accountId"
+              fi
+              cd ..
+            fi
+            
+            # Deploy Security Assessment
+            if [[ $DEPLOY_SECURITY_ASSESSMENT = 'true' ]]; then
+              echo "Deploying Security Assessment to $accountId"
+              cd resco-security-assessment
+              sam build --use-container --template template.yaml
+              sam deploy --template-file .aws-sam/build/template.yaml \
+                --stack-name resco-security-$accountId \
+                --capabilities CAPABILITY_IAM \
+                --no-confirm-changeset \
+                --resolve-s3 \
+                --parameter-overrides BucketName=$BUCKET_REPORT \
+                --region $AWS_DEFAULT_REGION || echo "Security deploy failed for $accountId"
+              
+              # Start Security assessment
+              STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-security-$accountId --query 'Stacks[0].Outputs[?OutputKey==`SecurityAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
+              if [[ $STATE_MACHINE_ARN != "" ]]; then
+                aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}" --query 'executionArn' --output text
+                echo "Started Security assessment for $accountId"
+              fi
+              cd ..
+            fi
+            
+            # Deploy Resilience Assessment
+            if [[ $DEPLOY_RESILIENCE_ASSESSMENT = 'true' ]]; then
+              echo "Deploying Resilience Assessment to $accountId"
+              cd resco-resilience-assessment
+              sam build --use-container --template template.yaml
+              sam deploy --template-file .aws-sam/build/template.yaml \
+                --stack-name resco-resilience-$accountId \
+                --capabilities CAPABILITY_IAM \
+                --no-confirm-changeset \
+                --resolve-s3 \
+                --parameter-overrides BucketName=$BUCKET_REPORT \
+                --region $AWS_DEFAULT_REGION || echo "Resilience deploy failed for $accountId"
+              
+              # Start Resilience assessment
+              STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-resilience-$accountId --query 'Stacks[0].Outputs[?OutputKey==`ResilienceAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
+              if [[ $STATE_MACHINE_ARN != "" ]]; then
+                aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}" --query 'executionArn' --output text
+                echo "Started Resilience assessment for $accountId"
+              fi
+              cd ..
+            fi
+            
+            # Deploy Cost Assessment
+            if [[ $DEPLOY_COST_ASSESSMENT = 'true' ]]; then
+              echo "Deploying Cost Assessment to $accountId"
+              cd resco-cost-assessment
+              sam build --use-container --template template.yaml
+              sam deploy --template-file .aws-sam/build/template.yaml \
+                --stack-name resco-cost-$accountId \
+                --capabilities CAPABILITY_IAM \
+                --no-confirm-changeset \
+                --resolve-s3 \
+                --parameter-overrides BucketName=$BUCKET_REPORT \
+                --region $AWS_DEFAULT_REGION || echo "Cost deploy failed for $accountId"
+              
+              # Start Cost assessment
+              STATE_MACHINE_ARN=$(aws cloudformation describe-stacks --stack-name resco-cost-$accountId --query 'Stacks[0].Outputs[?OutputKey==`CostAssessmentStateMachineArn`].OutputValue' --output text 2>/dev/null)
+              if [[ $STATE_MACHINE_ARN != "" ]]; then
+                aws stepfunctions start-execution --state-machine-arn $STATE_MACHINE_ARN --input "{\"accountId\":\"$accountId\"}" --query 'executionArn' --output text
+                echo "Started Cost assessment for $accountId"
+              fi
+              cd ..
+            fi
+            
+            # Clear credentials
+            unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+          done
+          
+          # Deploy to management account
+          echo "Deploying to management account $AWS_ACCOUNT_ID"
+          # Similar deployment logic for management account...
+          
+        else
+          echo "Single account deployment"
+          # Deploy selected modules to current account
+          if [[ $DEPLOY_AIML_ASSESSMENT = 'true' ]]; then
+            cd resco-aiml-assessment
+            sam build --use-container
+            sam deploy --template-file .aws-sam/build/template.yaml \
+              --stack-name resco-aiml-security \
+              --capabilities CAPABILITY_IAM \
+              --no-confirm-changeset \
+              --s3-bucket $BUCKET_REPORT \
+              --parameter-overrides BucketName=$BUCKET_REPORT
+            cd ..
+          fi
+          # Add similar blocks for other assessment types...
+        fi
+
+  post_build:
+    commands:
+      - echo "Assessment completed. Results in S3:$BUCKET_REPORT"
+      - echo "Generating consolidated multi-module report"
+      
+      # Consolidate results from all deployed modules
+      - |-
+        if [[ $MULTI_ACCOUNT_SCAN = 'true' ]]; then
+          pip3 install beautifulsoup4
+          
+          # Wait for all assessments to complete and collect results
+          # This would include logic to:
+          # 1. Wait for Step Functions to complete
+          # 2. Collect results from each module type
+          # 3. Generate consolidated report across all assessment types
+          # 4. Upload to central S3 bucket organized by assessment type
+          
+          python3 consolidate_multi_module_reports.py
+        fi
+      - echo "Multi-module assessment and consolidation completed"
