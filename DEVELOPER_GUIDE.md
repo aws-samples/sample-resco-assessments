@@ -468,25 +468,12 @@ See [Security issue notifications](CONTRIBUTING.md#security-issue-notifications)
 - Results are consolidated at the module level
 - Buildspec orchestrates module deployment across accounts
 
-### Extension Opportunities
-- **Custom Reporting**: Multi-module consolidated reports
-- **Cross-Module Analysis**: Dependencies between assessment types
-- **Compliance Frameworks**: Module-specific compliance checks
-- **Remediation Automation**: Module-specific auto-remediation
-- **Real-time Monitoring**: Continuous assessment per module
-
 ## Support and Resources
 
 ### Documentation
 - [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)
 - [AWS Security Best Practices](https://aws.amazon.com/security/security-resources/)
 - [AWS SAM Developer Guide](https://docs.aws.amazon.com/serverless-application-model/)
-
-### Community
-- Submit issues and feature requests via GitHub
-- Contribute improvements through pull requests
-- Share assessment templates and best practices
-- Join community discussions and knowledge sharing
 
 ---
 
