@@ -248,8 +248,8 @@ def check_guardduty_enabled() -> Dict[str, Any]:
                             finding_details='SageMaker protection is not enabled in Amazon GuardDuty. This feature helps detect threats in SageMaker runtime operations.',
                             resolution='Enable SageMaker protection in GuardDuty to monitor for potential security threats in your SageMaker environment.',
                             reference='https://docs.aws.amazon.com/guardduty/latest/ug/runtime-monitoring.html',
-                            severity='N/A',
-                            status='N/A'
+                            severity='High',
+                            status='Failed'
                         ))
             except ClientError as e:
                 logger.warning(f"Could not check GuardDuty features: {str(e)}")
@@ -742,7 +742,7 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                     'component': 'Feature Store',
                     'issue': 'No feature groups found',
                     'impact': 'Feature reuse and sharing may be limited',
-                    'severity': 'N/A',
+                    'severity': 'Informational',
                     'status': 'N/A'
                 })
             else:
@@ -778,7 +778,7 @@ def check_sagemaker_mlops_utilization(permission_cache) -> Dict[str, Any]:
                     'component': 'Pipelines',
                     'issue': 'No ML pipelines found',
                     'impact': 'Automated ML workflows may not be implemented',
-                    'severity': 'N/A',
+                    'severity': 'Informational',
                     'status': 'N/A'
                 })
             else:
@@ -908,7 +908,7 @@ def check_sagemaker_clarify_usage(permission_cache) -> Dict[str, Any]:
                 issues_found.append({
                     'issue_type': 'No Clarify Usage',
                     'details': 'No SageMaker Clarify jobs found',
-                    'severity': 'N/A',
+                    'severity': 'Informational',
                     'status': 'N/A'
                 })
 
@@ -997,7 +997,7 @@ def check_sagemaker_model_monitor_usage(permission_cache) -> Dict[str, Any]:
                 issues_found.append({
                     'issue_type': 'No Model Monitoring',
                     'details': 'No Model Monitor schedules found',
-                    'severity': 'N/A',
+                    'severity': 'Informational',
                     'status': 'N/A'
                 })
 
@@ -1090,8 +1090,8 @@ def check_model_registry_usage(permission_cache) -> Dict[str, Any]:
                                 issues_found.append({
                                     'issue_type': 'No Approved Models',
                                     'details': f"Model group {group_name} has no approved models",
-                                    'severity': 'N/A',
-                                    'status': 'N/A'
+                                    'severity': 'Low',
+                                    'status': 'Failed'
                                 })
                     
                     except Exception as e:
@@ -1107,7 +1107,7 @@ def check_model_registry_usage(permission_cache) -> Dict[str, Any]:
                 issues_found.append({
                     'issue_type': 'Registry Not Used',
                     'details': 'Model Registry is not being utilized',
-                    'severity': 'N/A',
+                    'severity': 'Informational',
                     'status': 'N/A'
                 })
 

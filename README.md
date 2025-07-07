@@ -8,11 +8,14 @@ ReSCO assessments help organizations evaluate and improve their:
 - **Security**: Security posture, compliance, and risk management
 - **Cost Optimization**: Resource utilization, cost efficiency, and optimization opportunities
 
-## Projects
+## Assessment Modules 
 
-| Project | Description | Status |
-|---------|------------|--------|
-| [resco-aiml-assessment](./resco-aiml-assessment) | ReSCO assessment tools for AI/ML workloads | Active |
+| Module | Description | Lambda Functions | Status |
+|--------|-------------|------------------|--------|
+| [resco-aiml-assessment](./resco-aiml-assessment) | AI/ML workload assessments | Bedrock Lambda, SageMaker Lambda | ✅ Active |
+| [resco-security-assessment](./resco-security-assessment) | General security assessments | EC2 Lambda, RDS Lambda, Lambda Lambda, VPC Lambda | 🚧 Planned |
+| [resco-resilience-assessment](./resco-resilience-assessment) | Resilience & DR assessments | Backup Lambda, HA Lambda, DR Lambda, FT Lambda | 📋 Planned |
+| [resco-cost-assessment](./resco-cost-assessment) | Cost optimization assessments | Utilization Lambda, Optimization Lambda, Rightsizing Lambda, Waste Lambda | 📋 Planned |
 
 ## Prerequisites
 - Python 3.12+ - [Install Python](https://www.python.org/downloads/)
@@ -28,16 +31,26 @@ cd resco-assessments/deployment
 ```
 You will see 1-resco-member-roles.yaml and 2-resco-multi-account-assessment.yaml file in the deployment folder. 
 
-For single account deployment, proceed to Deployment Step #2 and choose Single Account Mode.
+For single account deployment, skip to [Step 2: Deploy Central Infrastructure](#step-2-deploy-central-infrastructure) and choose Single Account Mode.
+For multi account deployment, proceed with all the below steps.
 
-The multi-account deployment consists of:
+The deployment follows a two-phase approach:
 
-1. **Central Security Account**: Runs the main assessment infrastructure
-2. **Member Accounts**: Have cross-account roles that allow the central account to perform assessments
+**Phase 1: Infrastructure Setup**
+1. **Member Account Roles**: Deploy `1-resco-member-roles.yaml` via StackSets to all target accounts
+2. **Central Infrastructure**: Deploy `2-resco-multi-account-assessment.yaml` in management account
 
-### Deployment Steps
+**Phase 2: Assessment Execution (Automatic)**
+3. **CodeBuild Orchestration**: Automatically triggered after central stack creation
+4. **Module Deployment**: Conditionally deploys assessment modules to each account
+5. **Assessment Execution**: Step Functions orchestrate service-specific Lambda functions
+6. **Results Consolidation**: Multi-account, multi-module report generation
 
-#### Step 1: Deploy Member Roles (via StackSets)
+### Two-Phase Deployment Process
+
+## Phase 1: Infrastructure Setup
+
+### Step 1: Deploy Member Roles (StackSets)
 
 Deploy `1-resco-member-roles.yaml` to all target accounts using CloudFormation StackSets.
 
@@ -45,81 +58,67 @@ Deploy `1-resco-member-roles.yaml` to all target accounts using CloudFormation S
 - AWS Organizations setup with management account access
 - StackSets service-linked roles configured
 
-#### Option A: AWS Console
-1. Navigate to **CloudFormation** > **StackSets** in the AWS Console
-2. Click **Create StackSet**
-3. Choose **Template is ready** and **Upload a template file**
-4. Upload `1-resco-member-roles.yaml`
-5. Enter StackSet name: `resco-aiml-member-roles`
-6. Set parameters:
-   - `ReSCOAccountID`: Your central security account ID (e.g., 123456789012)
-7. Configure StackSet options:
-   - **Permissions**: Choose service-managed permissions
-   - **Capabilities**: Check "I acknowledge that AWS CloudFormation might create IAM resources with custom names"
-8. Set deployment targets:
-   - **Deploy to**: Organization or Organizational units
-   - **Regions**: Select your target region (e.g., us-east-1)
-9. Review and click **Submit**
+#### AWS Console Deployment
+1. Navigate to **CloudFormation** > **StackSets**
+2. Create StackSet with `1-resco-member-roles.yaml`
+3. Set `ReSCOAccountID` parameter to your management account ID
+4. Deploy to target organizational units or accounts
 
-#### Option B: AWS CLI
+#### AWS CLI Deployment
 ```bash
-# Create the StackSet
+# Create and deploy StackSet
 aws cloudformation create-stack-set \
   --stack-set-name resco-aiml-member-roles \
   --template-body file://1-resco-member-roles.yaml \
   --parameters ParameterKey=ReSCOAccountID,ParameterValue=123456789012 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --administration-role-arn arn:aws:iam::MANAGEMENT-ACCOUNT:role/service-role/AWSCloudFormationStackSetAdministrationRole \
-  --execution-role-name AWSCloudFormationStackSetExecutionRole
+  --capabilities CAPABILITY_NAMED_IAM
 
-# Deploy to target accounts
 aws cloudformation create-stack-instances \
   --stack-set-name resco-aiml-member-roles \
   --deployment-targets OrganizationalUnitIds=ou-root-xxxxxxxxxx \
-  --regions us-east-1 \
-  --parameter-overrides ParameterKey=ReSCOAccountID,ParameterValue=123456789012
+  --regions us-east-1
 ```
 
-**Parameters:**
-- `ReSCOAccountID`: Account ID where the central ReSCO infrastructure will run
+### Step 2: Deploy Central Infrastructure
 
-### Step 2: Deploy Central Assessment Infrastructure
+Deploy `2-resco-multi-account-assessment.yaml` in your central management account.
 
-Deploy `2-resco-multi-account-assessment.yaml` in your central security account.
+#### AWS Console Deployment
+1. Navigate to **CloudFormation** > **Stacks**
+2. Create stack with `2-resco-multi-account-assessment.yaml` with name as `resco-aiml-multi-account`
+3. Configure assessment module parameters
+4. Stack creation automatically triggers CodeBuild
 
-#### Option A: AWS Console
-1. Navigate to **CloudFormation** > **Stacks** in the AWS Console
-2. Click **Create stack** > **With new resources (standard)**
-3. Choose **Template is ready** and **Upload a template file**
-4. Upload `2-resco-multi-account-assessment.yaml`
-5. Enter Stack name: `resco-aiml-multi-account`
-6. Configure parameters:
-   - `MultiAccountScan`: Select `true` for multi-account scanning
-   - `MultiAccountListOverride`: Leave blank or enter space-delimited account IDs
-   - `EmailAddress`: Enter your email for notifications (optional)
-   - `ConcurrentAccountScans`: Choose Three, Six, or Twelve
-7. Configure stack options (leave defaults)
-8. Review and check:
-   - "I acknowledge that AWS CloudFormation might create IAM resources with custom names"
-9. Click **Submit**
-
-#### Option B: AWS CLI
+#### AWS CLI Deployment
 ```bash
 aws cloudformation create-stack \
   --stack-name resco-aiml-multi-account \
   --template-body file://2-resco-multi-account-assessment.yaml \
   --parameters \
     ParameterKey=MultiAccountScan,ParameterValue=true \
-    ParameterKey=EmailAddress,ParameterValue=security-team@company.com \
-    ParameterKey=ConcurrentAccountScans,ParameterValue=Three \
+    ParameterKey=DEPLOY_AIML_ASSESSMENT,ParameterValue=true \
   --capabilities CAPABILITY_NAMED_IAM
 ```
+
+## Phase 2: Assessment Execution (Automatic)
+
+After central stack creation:
+1. **Lambda Trigger** automatically starts CodeBuild project
+2. **CodeBuild** orchestrates multi-account deployment and assessment
+3. **Results** are consolidated in central S3 bucket
+4. **Notifications** sent via SNS (if configured)
 
 **Key Parameters:**
 - `MultiAccountScan`: Set to `true` for multi-account scanning
 - `MultiAccountListOverride`: Space-delimited list of specific accounts (optional)
 - `EmailAddress`: Email for completion notifications (optional)
 - `ConcurrentAccountScans`: Number of parallel scans (Three/Six/Twelve)
+
+**Assessment Module Configuration (Environment Variables):**
+- `DEPLOY_AIML_ASSESSMENT`: Deploy AI/ML assessment module (default: true)
+- `DEPLOY_SECURITY_ASSESSMENT`: Deploy security assessment module (default: false)
+- `DEPLOY_RESILIENCE_ASSESSMENT`: Deploy resilience assessment module (default: false)
+- `DEPLOY_COST_ASSESSMENT`: Deploy cost assessment module (default: false)
 
 ## How It Works
 
@@ -131,18 +130,29 @@ aws cloudformation create-stack \
 ### Multi-Account Mode (`MultiAccountScan=true`)
 - Lists all active accounts in AWS Organizations
 - Assumes `ReSCOAIMLMemberRole` in each target account
-- Deploys SAM application in each account with shared S3 bucket
-- Executes Step Functions in each account
-- Consolidates results in central S3 bucket
+- Deploys selected assessment modules in each account with shared S3 bucket
+- Executes Step Functions for each deployed module in each account
+- Consolidates results by assessment type in central S3 bucket
 
-### Assessment Process
-1. CodeBuild project starts automatically after stack creation
-2. For each target account:
-   - Assumes cross-account role
-   - Deploys ReSCO SAM application
-   - Executes Step Functions state machine
-   - Stores results in central S3 bucket
-3. Sends completion notification (if configured)
+### Assessment Execution Process
+
+#### Automatic Trigger
+- CodeBuild project starts automatically after central stack creation
+- Lambda trigger function initiates the assessment workflow
+
+#### Multi-Account Orchestration
+1. **Account Discovery**: CodeBuild queries AWS Organizations for active accounts
+2. **Role Assumption**: Assumes `ReSCOAIMLMemberRole` in each target account
+3. **Module Deployment**: Conditionally deploys selected assessment modules:
+   - AI/ML Assessment (Bedrock Lambda, SageMaker Lambda)
+   - Security Assessment (EC2 Lambda, RDS Lambda, Lambda Lambda, VPC Lambda)
+   - Resilience Assessment (Backup Lambda, HA Lambda, DR Lambda, FT Lambda)
+   - Cost Assessment (Utilization Lambda, Optimization Lambda, Rightsizing Lambda, Waste Lambda)
+4. **Assessment Execution**: Step Functions orchestrate parallel Lambda execution per module
+5. **Results Collection**: Individual Lambda functions store results in local S3 buckets
+6. **Consolidation**: CodeBuild collects and consolidates results from all accounts
+7. **Reporting**: Generates multi-account, multi-module HTML and CSV reports
+8. **Notification**: Sends completion notification via SNS (if configured)
 
 ## Permissions Required
 
@@ -195,17 +205,22 @@ Adjust `ConcurrentAccountScans` parameter based on your organization size and co
 
 ## Viewing Assessment Results
 
+You can check CodeBuild service to ensure that the assessmnt run has completed successfullybefore accessing the assesment results.
+
 ### Accessing Results
 
 1. **Find the S3 Bucket Name**:
    - Navigate to **CloudFormation** > **Stacks** in the AWS Console
-   - Select your `resco-aiml-multi-account` stack
+   - For single account, select the `resco-aiml-security` stack
+   - For multi account, select the `resco-aiml-multi-account` stack created in [Step 2: Deploy Central Infrastructure](#step-2-deploy-central-infrastructure)
    - Go to the **Outputs** tab
    - Copy the S3 bucket name from the `AssessmentBucketName` output
 
 2. **Navigate to S3 Bucket**:
    - Go to **S3** in the AWS Console
    - Search for and open your assessment bucket
+   - For single account, open security_assessment_XXXXX.html report
+   - For multi-account, follow below [Report Structure](#report-structure) guidance
 
 ### Report Structure
 
@@ -216,11 +231,19 @@ Adjust `ConcurrentAccountScans` parameter based on your organization size and co
 
 #### Individual Account Reports
 - **Location**: Folders named with account IDs (e.g., `123456789012/`)
-- **Content**: Account-specific CSV and HTML files
+- **Content**: Account-specific CSV and HTML files organized by assessment type
 - **Files Include**:
-  - `bedrock_security_report_*.csv` - Bedrock assessment data
-  - `sagemaker_security_report_*.csv` - SageMaker assessment data
-  - `security_report_*.html` - Individual account HTML report
+  - `aiml/` - AI/ML assessment results
+    - `bedrock_assessment_*.csv` - Bedrock Lambda results
+    - `sagemaker_assessment_*.csv` - SageMaker Lambda results
+  - `security/` - Security assessment results
+    - `ec2_security_*.csv` - EC2 Lambda results
+    - `rds_security_*.csv` - RDS Lambda results
+    - `lambda_security_*.csv` - Lambda Lambda results
+    - `vpc_security_*.csv` - VPC Lambda results
+  - `resilience/` - Resilience assessment results (per service Lambda)
+  - `cost/` - Cost optimization assessment results (per service Lambda)
+  - `consolidated_report_*.html` - Multi-module account report
 
 ### Sample Assessment Report
 
@@ -262,7 +285,7 @@ The consolidated report provides a comprehensive view of security findings acros
 
 ## Contributing
 
-We welcome community contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome community contributions! Please see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for guidelines.
 
 ## Security
 - All roles follow least-privilege principle
