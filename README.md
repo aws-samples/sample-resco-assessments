@@ -72,7 +72,7 @@ Deploy `2-resco-assessment-codebuild.yaml` in your central management account.
 
 **Quick Deploy**: Click the link below to open CloudFormation with pre-configured settings:
 
-🚀 **[Deploy to AWS CloudFormation](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template?stackName=resco-aiml-multi-account)**
+🚀 **[Deploy to AWS CloudFormation](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template?stackName=resco-aiml-single-account)**
 
 Then:
 1. Select **Upload a template file**
