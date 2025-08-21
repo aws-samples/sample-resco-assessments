@@ -24,7 +24,7 @@ ReSCO assessments help organizations evaluate and improve their:
 
 ## Single-Account Deployment
 1. Download [2-resco-assessment-codebuild.yaml](deployment/2-resco-assessment-codebuild.yaml) Cfn template.
-2. 🚀 **[Deploy to AWS CloudFormation](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template?stackName=resco-aiml-multi-account)** 
+2. 🚀 **[Deploy to AWS CloudFormation](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template?stackName=resco-aiml-single-account)** 
 3. Upload Cfn template from step 1.
 4. Provide a stack name on the next screen and leave all default parameters. 
 5. Navigate to the next page, read and acknowledge the notice, and click **Next**.
@@ -72,7 +72,7 @@ Deploy `2-resco-assessment-codebuild.yaml` in your central management account.
 
 **Quick Deploy**: Click the link below to open CloudFormation with pre-configured settings:
 
-🚀 **[Deploy to AWS CloudFormation](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template?stackName=resco-aiml-single-account)**
+🚀 **[Deploy to AWS CloudFormation](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template?stackName=resco-aiml-multi-account)**
 
 Then:
 1. Select **Upload a template file**
