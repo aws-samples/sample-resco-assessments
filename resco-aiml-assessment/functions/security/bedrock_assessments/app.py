@@ -944,8 +944,8 @@ def check_bedrock_cloudtrail_logging() -> Dict[str, Any]:
                     create_finding(
                         finding_name="Bedrock CloudTrail Logging Check",
                         finding_details="CloudTrail is not configured to log Amazon Bedrock API calls. This limits your ability to audit and monitor Bedrock usage.",
-                        resolution="Enable CloudTrail logging for Bedrock by either:\n" + 
-                                 "1. Configuring an advanced event selector for Bedrock events, or\n" +
+                        resolution="Enable CloudTrail logging for Bedrock by :\n" + 
+                                 "1. Configuring an advanced event selector for Bedrock events \n" +
                                  "2. Enabling management events logging in a multi-region trail",
                         reference="https://docs.aws.amazon.com/bedrock/latest/userguide/logging-using-cloudtrail.html",
                         severity='High',

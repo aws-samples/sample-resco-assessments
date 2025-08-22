@@ -227,7 +227,7 @@ def check_guardduty_enabled() -> Dict[str, Any]:
                     status='Passed'
                 )
             )
-            
+           '''
             # Check if SageMaker protection is enabled
             detector_id = detectors['DetectorIds'][0]
             try:
@@ -253,7 +253,7 @@ def check_guardduty_enabled() -> Dict[str, Any]:
                         ))
             except ClientError as e:
                 logger.warning(f"Could not check GuardDuty features: {str(e)}")
-                
+            '''    
     except ClientError as e:
         error_code = e.response['Error']['Code']
         error_message = e.response['Error']['Message']
