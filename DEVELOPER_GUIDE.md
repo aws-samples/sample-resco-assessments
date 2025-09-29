@@ -96,14 +96,6 @@ resco-assessments/
 - **Comprehend Assessment Lambda**: Data privacy, Access controls (Future)
 - **Textract Assessment Lambda**: Document processing security (Future)
 
-### 2. Security Assessment (`resco-security-assessment/`)
-- **Planned**
-
-### 3. Resilience Assessment (`resco-resilience-assessment/`)
-- **Planned**
-
-### 4. Cost Assessment (`resco-cost-assessment/`)
-- **Planned**
 
 ## Adding New Assessment Services
 
@@ -111,9 +103,7 @@ resco-assessments/
 
 Determine which module your new service belongs to:
 - **AI/ML services** → `resco-aiml-assessment/`
-- **General security** → `resco-security-assessment/`
-- **Resilience/DR** → `resco-resilience-assessment/`
-- **Cost optimization** → `resco-cost-assessment/`
+
 
 ### Step 2: Create Service Assessment Function
 
@@ -458,9 +448,7 @@ See [Security issue notifications](CONTRIBUTING.md#security-issue-notifications)
 
 ### Current Status
 - ✅ **AI/ML Assessment**: Bedrock Lambda, SageMaker Lambda (Active)
-- 🚧 **Security Assessment**:  Planned
-- 📋 **Resilience Assessment**: Planned
-- 📋 **Cost Assessment**: Planned
+
 
 ### Service-Level Development Pattern
 - Each AWS service gets its own dedicated Lambda function
