@@ -1,26 +1,28 @@
-# ReSCO Assessments
+# ReSCO AI/ML Security Assessments
 
 ## Overview
-This monorepo contains a collection of tools and frameworks for performing ReSCO (Resilience, Security, and Cost Optimization) assessments across different types of workloads and infrastructures. It uses AWS serverless services to gather the data from the control plane and provide a list of assessments with the sevrity level and recommended actions.
+This project contains a collection of tools and frameworks for performing security assessments for your AI/ML workload on your single AWS account or multiple AWS accounts. It uses AWS serverless services to gather the data from the control plane and provide a list of assessments with the sevrity level and recommended actions.
 
 ReSCO assessments help organizations evaluate and improve their:
 - **Resilience**: System reliability, fault tolerance, and disaster recovery capabilities
 - **Security**: Security posture, compliance, and risk management
 - **Cost Optimization**: Resource utilization, cost efficiency, and optimization opportunities
 
+This repo focus on performing security assessment for your workloads using [Amazon Bedrock](https://aws.amazon.com/bedrock/) or [Amazon Sagemaker AI](https://aws.amazon.com/sagemaker/ai/).
+
 ## Assessment Modules 
 
 | Module | Description | Lambda Functions | Status |
 |--------|-------------|------------------|--------|
 | [resco-aiml-assessment](./resco-aiml-assessment) | AI/ML workload assessments | Bedrock Lambda, SageMaker Lambda | ✅ Active |
-| [resco-security-assessment](./resco-security-assessment) | General security assessments | EC2 Lambda, RDS Lambda, Lambda Lambda, VPC Lambda | 🚧 Planned |
-| [resco-resilience-assessment](./resco-resilience-assessment) | Resilience & DR assessments | Backup Lambda, HA Lambda, DR Lambda, FT Lambda | 📋 Planned |
-| [resco-cost-assessment](./resco-cost-assessment) | Cost optimization assessments | Utilization Lambda, Optimization Lambda, Rightsizing Lambda, Waste Lambda | 📋 Planned |
 
 ## Prerequisites
 - Python 3.12+ - [Install Python](https://www.python.org/downloads/)
 - SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
 - Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
+
+## Architecture
+![Architecture](./generated-diagrams/ArchitectureDiagram.png)
 
 ## Single-Account Deployment
 1. Download [2-resco-assessment-codebuild.yaml](deployment/2-resco-assessment-codebuild.yaml) Cfn template.
