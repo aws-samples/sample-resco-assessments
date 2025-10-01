@@ -28,7 +28,8 @@ This repo focus on performing security assessment for your workloads using [Amaz
 1. Download [2-resco-assessment-codebuild.yaml](deployment/2-resco-assessment-codebuild.yaml) Cfn template.
 2. 🚀 **[Deploy to AWS CloudFormation](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template?stackName=resco-aiml-single-account)** 
 3. Upload Cfn template from step 1.
-4. Provide a stack name on the next screen and leave all default parameters. 
+4. Provide a stack name on the next screen and specify your email address to receive the generated report.
+4. Leave all other parameters as default.
 5. Navigate to the next page, read and acknowledge the notice, and click **Next**.
 6. Review the information and click on **Submit**.
 7. Wait for CloudFormation stack to complete.
@@ -37,87 +38,40 @@ This repo focus on performing security assessment for your workloads using [Amaz
 8. Review the findings and the suggestions. 
 
 ## Multi-Account Deployment
-The deployment follows a two-phase approach:
-
-**Phase 1: Infrastructure Setup**
-1. **Member Account Roles**: Deploy `1-resco-member-roles.yaml` via StackSets to all target accounts
-2. **Central Infrastructure**: Deploy `2-resco-assessment-codebuild.yaml` in management account
-
-**Phase 2: Assessment Execution (Automatic)**
-3. **CodeBuild Orchestration**: Automatically triggered after central stack creation
-4. **Module Deployment**: Conditionally deploys assessment modules to each account
-5. **Assessment Execution**: Step Functions orchestrate service-specific Lambda functions
-6. **Results Consolidation**: Multi-account, multi-module report generation
-
-## Phase 1: Infrastructure Setup
+The deployment follows a two-step approach:
 
 ### Step 1: Deploy Member Roles (StackSets)
 
-Deploy `1-resco-member-roles.yaml` to all target accounts using CloudFormation StackSets.
+Deploy [1-resco-member-roles.yaml](deployment/1-resco-member-roles.yaml) to all target accounts using CloudFormation StackSets.
 
 #### Prerequisites
-- AWS Organizations setup with management account access
+- AWS Organizations setup with management account access or delegated administrator member account.
 - StackSets service-linked roles configured
 
 #### AWS Console Deployment
 1. Navigate to **CloudFormation** > **StackSets**
-2. Create StackSet with `1-resco-member-roles.yaml`
+2. Create StackSet with [1-resco-member-roles.yaml](deployment/1-resco-member-roles.yaml)
 3. Set `ReSCOAccountID` parameter to your management account ID
 4. Deploy to target organizational units or accounts
 
 
 ### Step 2: Deploy Central Infrastructure
 
-Deploy `2-resco-assessment-codebuild.yaml` in your central management account.
+Deploy [2-resco-assessment-codebuild.yaml](deployment/2-resco-assessment-codebuild.yaml) in your central management account or delegated administrator member account..
 
 #### AWS Console Deployment
 
-**Quick Deploy**: Click the link below to open CloudFormation with pre-configured settings:
-
-🚀 **[Deploy to AWS CloudFormation](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template?stackName=resco-aiml-multi-account)**
-
-Then:
-1. Select **Upload a template file**
-2. Choose the `deployment/2-resco-assessment-codebuild.yaml` file from your cloned repository
+1. Navigate to [AWS CloudFormation](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template?stackName=resco-aiml-multi-account)**
+2. Select **Upload a template file** and upload [2-resco-assessment-codebuild.yaml](deployment/2-resco-assessment-codebuild.yaml) file.
+3. Select `MultiAccountScan` parameter as true
+3. Provide your email address in `EmailAddress` parameter.
+3. Leave rest of the parameters as default.
 3. Click **Next** and configure the parameters
 4. Stack creation automatically triggers CodeBuild
 
-**Manual Deployment**:
-1. Navigate to **CloudFormation** > **Stacks**
-2. Create stack with `2-resco-assessment-codebuild.yaml` with name as `resco-aiml-multi-account`
-3. Configure assessment module parameters
-4. Stack creation automatically triggers CodeBuild
 
-#### AWS CLI Deployment
-```bash
-aws cloudformation create-stack \
-  --stack-name resco-aiml-multi-account \
-  --template-body file://2-resco-assessment-codebuild.yaml \
-  --parameters \
-    ParameterKey=MultiAccountScan,ParameterValue=true \
-    ParameterKey=DEPLOY_AIML_ASSESSMENT,ParameterValue=true \
-  --capabilities CAPABILITY_NAMED_IAM
-```
+## Execution Assessment (Automatic)
 
-## Phase 2: Assessment Execution (Automatic)
-
-After central stack creation:
-1. **Lambda Trigger** automatically starts CodeBuild project
-2. **CodeBuild** orchestrates multi-account deployment and assessment
-3. **Results** are consolidated in central S3 bucket
-4. **Notifications** sent via SNS (if configured)
-
-**Key Parameters:**
-- `MultiAccountScan`: Set to `true` for multi-account scanning
-- `MultiAccountListOverride`: Space-delimited list of specific accounts (optional)
-- `EmailAddress`: Email for completion notifications (optional)
-- `ConcurrentAccountScans`: Number of parallel scans (Three/Six/Twelve)
-
-**Assessment Module Configuration (Environment Variables):**
-- `DEPLOY_AIML_ASSESSMENT`: Deploy AI/ML assessment module (default: true)
-- `DEPLOY_SECURITY_ASSESSMENT`: Deploy security assessment module (default: false)
-- `DEPLOY_RESILIENCE_ASSESSMENT`: Deploy resilience assessment module (default: false)
-- `DEPLOY_COST_ASSESSMENT`: Deploy cost assessment module (default: false)
 
 ## How It Works
 
@@ -175,32 +129,7 @@ After central stack creation:
 - **SNS Notifications**: Email alerts on completion/failure
 - **EventBridge Rules**: Automated workflow triggers
 
-## Customization
 
-### Adding New Accounts
-
-#### Option A: AWS Console
-1. Navigate to **CloudFormation** > **StackSets**
-2. Select `resco-aiml-member-roles` StackSet
-3. Click **Add stacks to StackSet**
-4. Choose deployment targets:
-   - **Deploy to accounts**: Enter specific account IDs
-   - **Regions**: Select target regions
-5. Review and click **Submit**
-
-#### Option B: AWS CLI
-```bash
-aws cloudformation create-stack-instances \
-  --stack-set-name resco-aiml-member-roles \
-  --accounts 111111111111 222222222222 \
-  --regions us-east-1
-```
-
-### Modifying Assessment Scope
-Edit the member role permissions in `1-resco-member-roles.yaml` to add/remove service permissions.
-
-### Concurrent Scanning
-Adjust `ConcurrentAccountScans` parameter based on your organization size and cost considerations.
 
 ## Viewing Assessment Results
 
@@ -267,6 +196,25 @@ The consolidated report provides a comprehensive view of security findings acros
   - **Failed**: Security issue identified
   - **Passed**: No issues found
   - **N/A**: Check not applicable to current configuration
+
+## Customization
+
+### Adding New Accounts
+
+#### Option A: AWS Console
+1. Navigate to **CloudFormation** > **StackSets**
+2. Select `resco-aiml-member-roles` StackSet
+3. Click **Add stacks to StackSet**
+4. Choose deployment targets:
+   - **Deploy to accounts**: Enter specific account IDs
+   - **Regions**: Select target regions
+5. Review and click **Submit**
+
+### Modifying Assessment Scope
+Edit the member role permissions in `1-resco-member-roles.yaml` to add/remove service permissions.
+
+### Concurrent Scanning
+Adjust `ConcurrentAccountScans` parameter based on your organization size and cost considerations.
 
 ## Troubleshooting
 
