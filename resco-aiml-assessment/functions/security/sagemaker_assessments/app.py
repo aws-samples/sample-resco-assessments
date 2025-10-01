@@ -227,33 +227,6 @@ def check_guardduty_enabled() -> Dict[str, Any]:
                     status='Passed'
                 )
             )
-           '''
-            # Check if SageMaker protection is enabled
-            detector_id = detectors['DetectorIds'][0]
-            try:
-                features = guardduty_client.get_detector(
-                    DetectorId=detector_id
-                ).get('Features', [])
-                
-                sagemaker_protection_enabled = False
-                for feature in features:
-                    if feature.get('Name') == 'RUNTIME_MONITORING' and feature.get('Status') == 'ENABLED':
-                        sagemaker_protection_enabled = True
-                        break
-                
-                if not sagemaker_protection_enabled:
-                    findings['csv_data'].append(
-                        create_finding(
-                            finding_name='SageMaker Protection Not Enabled',
-                            finding_details='SageMaker protection is not enabled in Amazon GuardDuty. This feature helps detect threats in SageMaker runtime operations.',
-                            resolution='Enable SageMaker protection in GuardDuty to monitor for potential security threats in your SageMaker environment.',
-                            reference='https://docs.aws.amazon.com/guardduty/latest/ug/runtime-monitoring.html',
-                            severity='High',
-                            status='Failed'
-                        ))
-            except ClientError as e:
-                logger.warning(f"Could not check GuardDuty features: {str(e)}")
-            '''    
     except ClientError as e:
         error_code = e.response['Error']['Code']
         error_message = e.response['Error']['Message']
